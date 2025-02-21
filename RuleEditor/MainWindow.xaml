@@ -1,0 +1,181 @@
+﻿<Window
+    x:Class="RuleEditor.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:local="clr-namespace:RuleEditor"
+    xmlns:avalonedit="http://icsharpcode.net/sharpdevelop/avalonedit"
+    xmlns:viewmodels="clr-namespace:RuleEditor.ViewModels"
+    xmlns:converters="clr-namespace:RuleEditor.Converters"
+    mc:Ignorable="d"
+    Title="Expression Rule Editor"
+    Height="600"
+    Width="800">
+
+    <Window.Resources>
+        <Style
+            x:Key="EditorStyle"
+            TargetType="{x:Type avalonedit:TextEditor}">
+            <Setter
+                Property="FontFamily"
+                Value="Consolas" />
+            <Setter
+                Property="FontSize"
+                Value="14" />
+            <Setter
+                Property="Background"
+                Value="#1E1E1E" />
+            <Setter
+                Property="Foreground"
+                Value="#DCDCDC" />
+            <Setter
+                Property="ShowLineNumbers"
+                Value="True" />
+            <Setter
+                Property="WordWrap"
+                Value="True" />
+        </Style>
+
+        <converters:ValidationColorConverter
+            x:Key="ValidationColorConverter" />
+    </Window.Resources>
+
+    <Grid
+        Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition
+                Height="Auto" />
+            <RowDefinition
+                Height="*" />
+            <RowDefinition
+                Height="Auto" />
+            <RowDefinition
+                Height="150" />
+        </Grid.RowDefinitions>
+
+        <!-- Rule Name and Description -->
+        <StackPanel
+            Grid.Row="0"
+            Margin="0,0,0,10">
+            <TextBlock
+                Text="Rule Name:"
+                Margin="0,0,0,5" />
+            <TextBox
+                Text="{Binding RuleEditorViewModel.CurrentRule.Name, UpdateSourceTrigger=PropertyChanged}"
+                Margin="0,0,0,10" />
+        </StackPanel>
+
+        <!-- Expression Editor -->
+        <Grid
+            Grid.Row="1">
+            <Grid.RowDefinitions>
+                <RowDefinition
+                    Height="Auto" />
+                <RowDefinition
+                    Height="*" />
+            </Grid.RowDefinitions>
+
+            <DockPanel
+                Grid.Row="0"
+                LastChildFill="False"
+                Margin="0,0,0,5">
+                <TextBlock
+                    Text="Expression:"
+                    VerticalAlignment="Center" />
+                <Button
+                    DockPanel.Dock="Right"
+                    Content="Format"
+                    Command="{Binding RuleEditorViewModel.FormatExpressionCommand}"
+                    Margin="5,0,0,0" />
+            </DockPanel>
+
+            <avalonedit:TextEditor
+                Grid.Row="1"
+                Name="ExpressionEditor"
+                Style="{StaticResource EditorStyle}"
+                SyntaxHighlighting="C#"
+                ShowLineNumbers="True"
+                Document="{Binding RuleEditorViewModel.ExpressionDocument, Mode=TwoWay}"
+                TextChanged="ExpressionEditor_TextChanged">
+            </avalonedit:TextEditor>
+        </Grid>
+
+        <!-- Validation Status -->
+        <TextBlock
+            Grid.Row="2"
+            Text="{Binding RuleEditorViewModel.ValidationMessage}"
+            Margin="0,10"
+            Foreground="{Binding RuleEditorViewModel.IsValid, Converter={StaticResource ValidationColorConverter}}" />
+
+        <!-- Preview/Help Section -->
+        <Grid
+            Grid.Row="3">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition
+                    Width="*" />
+                <ColumnDefinition
+                    Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Available Properties -->
+            <GroupBox
+                Header="Available Properties"
+                Grid.Column="0"
+                Margin="0,0,5,0">
+                <ListView
+                    x:Name="PropertyListView"
+                    ItemsSource="{Binding RuleEditorViewModel.AvailableProperties}"
+                    MouseDoubleClick="PropertyList_MouseDoubleClick">
+                    <ListView.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel
+                                Orientation="Horizontal">
+                                <TextBlock
+                                    Text="{Binding Name}" />
+                                <TextBlock
+                                    Text=" : " />
+                                <TextBlock
+                                    Text="{Binding Type}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </GroupBox>
+
+            <!-- Quick Help -->
+            <GroupBox
+                Header="Expression Help"
+                Grid.Column="1"
+                Margin="5,0,0,0">
+                <StackPanel
+                    Margin="5">
+                    <TextBlock
+                        TextWrapping="Wrap"
+                        Margin="0,0,0,5">
+                        <Run
+                            FontWeight="Bold">Available Operators:</Run>
+                        <LineBreak />
+                        <Run>Comparison: > &lt; >= &lt;= == !=</Run>
+                        <LineBreak />
+                        <Run>String: Contains, StartsWith, EndsWith</Run>
+                        <LineBreak />
+                        <Run>Logical: AND, OR, NOT</Run>
+                    </TextBlock>
+                    <TextBlock
+                        TextWrapping="Wrap"
+                        Margin="0,5">
+                        <Run
+                            FontWeight="Bold">Examples:</Run>
+                        <LineBreak />
+                        <Run>Age > 18</Run>
+                        <LineBreak />
+                        <Run>Name.Contains('John')</Run>
+                        <LineBreak />
+                        <Run>(Price >= 100 AND Category == 'Electronics')</Run>
+                    </TextBlock>
+                </StackPanel>
+            </GroupBox>
+        </Grid>
+    </Grid>
+</Window>
