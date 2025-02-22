@@ -2,7 +2,7 @@
 
 namespace RuleEditor.Models
 {
-    public class PropertyInfo
+    public class RulePropertyInfo
     {
         public string Name { get; set; }
         public Type Type { get; set; }

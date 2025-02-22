@@ -61,9 +61,9 @@ namespace RuleEditor
     public class OperatorCompletionData : ICompletionData
     {
         private readonly string _operator;
-        private readonly PropertyInfo _currentProperty;
+        private readonly RulePropertyInfo _currentProperty;
 
-        public OperatorCompletionData(string op, PropertyInfo currentProperty = null)
+        public OperatorCompletionData(string op, RulePropertyInfo currentProperty = null)
         {
             _operator = op;
             _currentProperty = currentProperty;

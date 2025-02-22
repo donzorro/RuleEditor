@@ -1,3 +1,4 @@
+using System;
 using System.Collections.ObjectModel;
 using RuleEditor.Models;
 
@@ -22,6 +23,17 @@ namespace RuleEditor.ViewModels
             };
             
             RuleEditorViewModel.SetTargetObject(testObject);
+
+
+            //// User enters expression
+            //viewModel.Expression = "Age > 18 AND Name.Contains('John')";
+
+            //// Compile the expression
+            //var rule = RuleEditorViewModel.CompileExpression();
+
+            //// Use the rule
+            //var person = new Person { Name = "John Doe", Age = 25 };
+            //bool matches = rule(person); // Returns true
         }
 
         public RuleEditorViewModel RuleEditorViewModel

@@ -10,9 +10,9 @@ namespace RuleEditor.Controls
 {
     public class PropertyCompletionData : ICompletionData
     {
-        private readonly PropertyInfo _propertyInfo;
+        private readonly RulePropertyInfo _propertyInfo;
 
-        public PropertyCompletionData(PropertyInfo propertyInfo)
+        public PropertyCompletionData(RulePropertyInfo propertyInfo)
         {
             _propertyInfo = propertyInfo;
         }

@@ -108,11 +108,26 @@ namespace RuleEditor.ViewModels
             // Split into tokens
             var tokens = lineText.Split(new[] { ' ', '(', ')', '"', '\'' }, StringSplitOptions.RemoveEmptyEntries);
 
-            // If we're at the start or after an operator, show completion
-            return tokens.Length == 0 ||
-                   (tokens.Length > 0 && _operators.Contains(tokens[tokens.Length - 1].ToUpper()));
+            // Always show completion at the start of a line or after an operator
+            if (tokens.Length == 0 ||
+                (tokens.Length > 0 && IsOperator(tokens[tokens.Length - 1])))
+            {
+                return true;
+            }
+
+            return false;
         }
 
+        private bool IsOperator(string token)
+        {
+            var operators = new[]
+            {
+        "==", "!=", ">", "<", ">=", "<=",
+        "CONTAINS", "STARTSWITH", "ENDSWITH",
+        "AND", "OR"
+    };
+            return operators.Contains(token.ToUpper());
+        }
         private void ShowCompletionWindow(TextArea textArea)
         {
             if (!(DataContext is MainViewModel viewModel))
@@ -179,7 +194,7 @@ namespace RuleEditor.ViewModels
             }
         }
 
-        private PropertyInfo FindLastProperty(List<string> tokens)
+        private RulePropertyInfo FindLastProperty(List<string> tokens)
         {
             if (!(DataContext is MainViewModel viewModel))
                 return null;
@@ -197,7 +212,7 @@ namespace RuleEditor.ViewModels
             return null;
         }
 
-        private string[] GetSupportedOperators(PropertyInfo property)
+        private string[] GetSupportedOperators(RulePropertyInfo property)
         {
             var allOperators = new[]
             {
@@ -212,7 +227,7 @@ namespace RuleEditor.ViewModels
         private void AddOperatorsCompletion(
             IList<ICompletionData> data,
             string[] operators,
-            PropertyInfo currentProperty)
+            RulePropertyInfo currentProperty)
         {
             foreach (var op in operators)
             {
@@ -336,7 +351,7 @@ namespace RuleEditor.ViewModels
 
         private void PropertyList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
-            if (sender is ListView listView && listView.SelectedItem is PropertyInfo property)
+            if (sender is ListView listView && listView.SelectedItem is RulePropertyInfo property)
             {
                 // Get the current caret position
                 var caretOffset = ExpressionEditor.CaretOffset;
