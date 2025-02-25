@@ -1,0 +1,23 @@
+﻿<UserControl
+  x:Class="RuleEditor.ViewModels.Version2.TokenizerControl"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  Focusable="True"
+  IsTabStop="True">
+  <Grid>
+    <WrapPanel
+      x:Name="tokenPanel"
+      Background="Transparent"
+      MouseDown="TokenPanel_MouseDown">
+      <!-- Tokens will be added here dynamically -->
+      <TextBox
+        x:Name="inputBox"
+        MinWidth="50"
+        TextWrapping="WrapWithOverflow"
+        BorderThickness="0"
+        Background="Transparent"
+        KeyDown="InputBox_KeyDown"
+        TextChanged="InputBox_TextChanged" />
+    </WrapPanel>
+  </Grid>
+</UserControl>
