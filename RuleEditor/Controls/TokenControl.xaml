@@ -18,7 +18,7 @@
     <StackPanel
       Orientation="Horizontal">
       <ComboBox
-        Text="{Binding Text}"
+        Text="{Binding Text, Mode=TwoWay}"
         IsEditable="True"
         ItemsSource="{Binding Suggestions}" />
       <!--<Button

@@ -8,13 +8,26 @@ using System.Runtime.CompilerServices;
 
 namespace RuleEditor.ViewModels.Version2
 {
-    public class RuleEditorViewModel2 : INotifyPropertyChanged
+    public class RuleEditorViewModel2 : ViewModelBase
     {
-        private string _expressionCode;
-        private List<RulePropertyInfo> _availableProperties;
-        private string _validationMessage;
+        // Example of property using the new pattern
+        public List<RulePropertyInfo> AvailableProperties
+        {
+            get => GetValue<List<RulePropertyInfo>>();
+            set => SetValue(value);
+        }
 
-        public event PropertyChangedEventHandler PropertyChanged;
+        public string ExpressionCode
+        {
+            get => GetValue<string>();
+            set => SetValue(value);
+        }
+
+        public string ValidationMessage
+        {
+            get => GetValue<string>();
+            set => SetValue(value);
+        }
 
         public RuleEditorViewModel2()
         {
@@ -34,42 +47,6 @@ namespace RuleEditor.ViewModels.Version2
             };
         }
 
-        public List<RulePropertyInfo> AvailableProperties
-        {
-            get => _availableProperties;
-            set
-            {
-                _availableProperties = value;
-                OnPropertyChanged();
-            }
-        }
-
-        public string ExpressionCode
-        {
-            get => _expressionCode;
-            set
-            {
-                if (_expressionCode != value)
-                {
-                    _expressionCode = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        public string ValidationMessage
-        {
-            get => _validationMessage;
-            set
-            {
-                if (_validationMessage != value)
-                {
-                    _validationMessage = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
         public (List<string> Suggestions, int StartIndex) GetSuggestions(string textBeforeCaret)
         {
             var suggestions = new List<string>();
@@ -86,15 +63,15 @@ namespace RuleEditor.ViewModels.Version2
             var currentWord = textBeforeCaret.Substring(startIndex).Trim();
 
             // Add property suggestions
-            suggestions.AddRange(_availableProperties
+            suggestions.AddRange(AvailableProperties
                 .Where(p => p.Name.StartsWith(currentWord, StringComparison.OrdinalIgnoreCase))
                 .Select(p => p.Name));
 
             // Add operator suggestions if after a property
             var tokens = Tokenize(textBeforeCaret);
-            if (tokens.Count > 0 && _availableProperties.Any(p => p.Name.Equals(tokens.Last(), StringComparison.OrdinalIgnoreCase)))
+            if (tokens.Count > 0 && AvailableProperties.Any(p => p.Name.Equals(tokens.Last(), StringComparison.OrdinalIgnoreCase)))
             {
-                var propertyType = _availableProperties.First(p => p.Name.Equals(tokens.Last(), StringComparison.OrdinalIgnoreCase)).Type;
+                var propertyType = AvailableProperties.First(p => p.Name.Equals(tokens.Last(), StringComparison.OrdinalIgnoreCase)).Type;
                 suggestions.AddRange(GetValidOperators(propertyType));
             }
 
@@ -113,7 +90,7 @@ namespace RuleEditor.ViewModels.Version2
                     continue;
 
                 // Check if token is a known property
-                if (!_availableProperties.Any(p => p.Name.Equals(token, StringComparison.OrdinalIgnoreCase)))
+                if (!AvailableProperties.Any(p => p.Name.Equals(token, StringComparison.OrdinalIgnoreCase)))
                 {
                     unknownProperties.Add(token);
                 }
@@ -293,11 +270,6 @@ namespace RuleEditor.ViewModels.Version2
             }
 
             return operators;
-        }
-
-        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
     }
 }
