@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Printing;
 using System.Windows;
 using System.Windows.Controls;
@@ -28,6 +29,32 @@ namespace RuleEditor.ViewModels.Version2
             throw new NotImplementedException();
         }
     }
+    
+    // Converter to invert boolean values and convert to Visibility
+    public class InverseBooleanToVisibilityConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value is bool boolValue)
+            {
+                return boolValue ? Visibility.Collapsed : Visibility.Visible;
+            }
+            return Visibility.Visible;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+    // Enum to track the current state of rule creation
+    public enum RuleInputState
+    {
+        Property,
+        Operation,
+        Value
+    }
 
     public partial class TokenizerControl : UserControl
     {
@@ -37,12 +64,29 @@ namespace RuleEditor.ViewModels.Version2
         public event EventHandler<TextChangedEventArgs> TextChanged;
 
         private List<TokenControl> tokens = new List<TokenControl>();
+        private RuleInputState currentState = RuleInputState.Property;
+        
+        // Lists of valid properties and operations
+        private List<string> validProperties = new List<string>
+        {
+            "Name", "Age", "Email", "IsActive", "Balance", "LastLoginDate"
+        };
+        
+        private List<string> validOperations = new List<string>
+        {
+            "==", "!=", ">", "<", ">=", "<=", "CONTAINS", "STARTSWITH", "ENDSWITH"
+        };
+        
+        private List<string> logicalOperators = new List<string>
+        {
+            "AND", "OR", "NOT"
+        };
 
         public TokenizerControl()
         {
             InitializeComponent();
             
-            // Initialize the ComboBox with suggestions
+            // Initialize the ComboBox with suggestions based on current state
             UpdateComboBoxSuggestions();
         }
 
@@ -51,31 +95,78 @@ namespace RuleEditor.ViewModels.Version2
             // Clear existing items
             inputBox.Items.Clear();
             
-            // Add property suggestions
-            foreach (var property in GetAllSuggestions())
+            // Always allow typing, but we'll validate the input differently based on state
+            inputBox.IsEditable = true;
+            
+            // Add suggestions based on current state
+            switch (currentState)
             {
-                inputBox.Items.Add(property);
+                case RuleInputState.Property:
+                    foreach (var property in validProperties)
+                    {
+                        inputBox.Items.Add(property);
+                    }
+                    // Allow logical operators if we have at least one complete rule
+                    if (HasCompleteRule())
+                    {
+                        foreach (var op in logicalOperators)
+                        {
+                            inputBox.Items.Add(op);
+                        }
+                    }
+                    break;
+                    
+                case RuleInputState.Operation:
+                    foreach (var operation in validOperations)
+                    {
+                        inputBox.Items.Add(operation);
+                    }
+                    break;
+                    
+                case RuleInputState.Value:
+                    // For values, we don't restrict input, so no suggestions needed
+                    // But we could add some common values as suggestions
+                    inputBox.Items.Add("true");
+                    inputBox.Items.Add("false");
+                    inputBox.Items.Add("0");
+                    inputBox.Items.Add("100");
+                    break;
             }
         }
-
-        private List<string> GetAllSuggestions()
+        
+        // Check if we have at least one complete rule (property-operation-value)
+        private bool HasCompleteRule()
         {
-            // This method should return all possible suggestions
-            // For now, return a basic list that can be expanded later
-            return new List<string>
-            {
-                "Name", "Age", "IsActive", "Balance", "Email", "LastLoginDate",
-                "AND", "OR", "NOT", ">", "<", ">=", "<=", "==", "!=", 
-                "CONTAINS", "STARTSWITH", "ENDSWITH"
-            };
+            return tokens.Count >= 3 && 
+                   tokens.Count % 3 == 0; // Complete rules should have tokens in multiples of 3
         }
 
         private void InputBox_KeyDown(object sender, KeyEventArgs e)
         {
-            if (e.Key == Key.Space || e.Key == Key.Enter)
+            if (e.Key == Key.Enter)
             {
+                if (!string.IsNullOrEmpty(GetInputText().Trim()))
+                {
+                    // Create token from current input
+                    CreateTokenFromInput();
+                    
+                    // Focus the input box again to prepare for next token
+                    inputBox.Focus();
+                }
+                else if (tokens.Count > 0)
+                {
+                    // If input is empty and we have tokens, focus the first token
+                    tokens[0].Focus();
+                }
+                
                 e.Handled = true;
-                CreateTokenFromInput();
+            }
+            else if (e.Key == Key.Back && string.IsNullOrEmpty(GetInputText()) && tokens.Count > 0)
+            {
+                // If backspace is pressed on empty input and we have tokens, remove the last token
+                var lastToken = tokens[tokens.Count - 1];
+                Token_Removed(lastToken, new TokenRemovedEventArgs(lastToken));
+                e.Handled = true;
             }
         }
 
@@ -101,6 +192,14 @@ namespace RuleEditor.ViewModels.Version2
         {
             var text = GetInputText().Trim();
             if (string.IsNullOrEmpty(text)) return;
+            
+            // Validate input based on current state
+            if (!ValidateInput(text))
+            {
+                // If invalid, clear the input and don't create a token
+                inputBox.Text = string.Empty;
+                return;
+            }
 
             var token = new TokenControl
             {
@@ -119,18 +218,107 @@ namespace RuleEditor.ViewModels.Version2
             // Clear the input box
             inputBox.Text = string.Empty;
             
+            // Advance to the next state
+            AdvanceState(text);
+            
+            // Update suggestions for the new state
+            UpdateComboBoxSuggestions();
+            
             // Notify that a token was added
             TokenAdded?.Invoke(this, new TokenEventArgs(token));
+        }
+        
+        private bool ValidateInput(string text)
+        {
+            switch (currentState)
+            {
+                case RuleInputState.Property:
+                    // Must be a valid property or logical operator
+                    return validProperties.Contains(text) || 
+                           (HasCompleteRule() && logicalOperators.Contains(text));
+                    
+                case RuleInputState.Operation:
+                    // Must be a valid operation
+                    return validOperations.Contains(text);
+                    
+                case RuleInputState.Value:
+                    // Values can be anything
+                    return true;
+                    
+                default:
+                    return false;
+            }
+        }
+        
+        private void AdvanceState(string text)
+        {
+            // If we added a logical operator, stay in Property state
+            if (logicalOperators.Contains(text))
+            {
+                currentState = RuleInputState.Property;
+                return;
+            }
+            
+            // Otherwise advance to the next state
+            switch (currentState)
+            {
+                case RuleInputState.Property:
+                    currentState = RuleInputState.Operation;
+                    break;
+                    
+                case RuleInputState.Operation:
+                    currentState = RuleInputState.Value;
+                    break;
+                    
+                case RuleInputState.Value:
+                    // After a value, we go back to property for the next rule
+                    currentState = RuleInputState.Property;
+                    break;
+            }
         }
 
         private void Token_Removed(object sender, TokenRemovedEventArgs e)
         {
             var token = e.RemovedToken;
+            var tokenIndex = tokens.IndexOf(token);
+            
             tokenPanel.Children.Remove(token);
             tokens.Remove(token);
             
+            // Recalculate the current state based on remaining tokens
+            RecalculateState();
+            
+            // Update suggestions
+            UpdateComboBoxSuggestions();
+            
             // Notify that a token was removed
             TokenRemoved?.Invoke(this, new TokenEventArgs(token));
+        }
+        
+        private void RecalculateState()
+        {
+            // If no tokens, we're at the beginning (Property state)
+            if (tokens.Count == 0)
+            {
+                currentState = RuleInputState.Property;
+                return;
+            }
+            
+            // Calculate state based on the number of non-logical tokens
+            int nonLogicalTokens = tokens.Count(t => !logicalOperators.Contains(t.Text));
+            
+            switch (nonLogicalTokens % 3)
+            {
+                case 0:
+                    currentState = RuleInputState.Property;
+                    break;
+                case 1:
+                    currentState = RuleInputState.Operation;
+                    break;
+                case 2:
+                    currentState = RuleInputState.Value;
+                    break;
+            }
         }
 
         private TokenType DetermineTokenType(string text)
@@ -145,16 +333,30 @@ namespace RuleEditor.ViewModels.Version2
 
         private List<string> GetSuggestionsForType(string text)
         {
-            // This would be expanded to provide context-sensitive suggestions
-            return GetAllSuggestions();
+            // Return suggestions based on token type
+            if (IsOperator(text))
+            {
+                return validOperations.Concat(logicalOperators).ToList();
+            }
+            else if (IsProperty(text))
+            {
+                return validProperties;
+            }
+            else
+            {
+                // For values, return some common values
+                return new List<string> { "true", "false", "0", "100" };
+            }
+        }
+        
+        private bool IsProperty(string text)
+        {
+            return validProperties.Contains(text);
         }
 
         private bool IsOperator(string text)
         {
-            return text == "AND" || text == "OR" || text == "NOT" ||
-                   text == ">" || text == "<" || text == ">=" || text == "<=" ||
-                   text == "==" || text == "!=" || text == "CONTAINS" ||
-                   text == "STARTSWITH" || text == "ENDSWITH";
+            return validOperations.Contains(text) || logicalOperators.Contains(text);
         }
 
         private bool IsValue(string text)
@@ -207,9 +409,20 @@ namespace RuleEditor.ViewModels.Version2
             
             // Split expression into tokens and add them
             var words = expression.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            
+            // Reset state
+            currentState = RuleInputState.Property;
+            
             foreach (var word in words)
             {
                 if (string.IsNullOrWhiteSpace(word)) continue;
+                
+                // Validate input based on current state
+                if (!ValidateInput(word))
+                {
+                    // Skip invalid tokens
+                    continue;
+                }
                 
                 var token = new TokenControl
                 {
@@ -224,10 +437,13 @@ namespace RuleEditor.ViewModels.Version2
                 token.TokenRemoved += Token_Removed;
                 tokens.Add(token);
                 tokenPanel.Children.Insert(tokenPanel.Children.Count - 1, token);
+                
+                // Advance to the next state
+                AdvanceState(word);
             }
             
-            // Clear the input box
-            inputBox.Text = string.Empty;
+            // Update suggestions for the current state
+            UpdateComboBoxSuggestions();
         }
 
         private void TokenPanel_MouseDown(object sender, MouseButtonEventArgs e)
@@ -247,6 +463,41 @@ namespace RuleEditor.ViewModels.Version2
         public new bool Focus()
         {
             return inputBox.Focus();
+        }
+        
+        private void InputBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            // When an item is selected from the dropdown, create a token immediately
+            if (inputBox.SelectedItem != null)
+            {
+                // Set the text to the selected item
+                inputBox.Text = inputBox.SelectedItem.ToString();
+                
+                // Create a token from the selected item
+                CreateTokenFromInput();
+                
+                // Clear the selection
+                inputBox.SelectedItem = null;
+            }
+        }
+        
+        private void InputBox_LostFocus(object sender, RoutedEventArgs e)
+        {
+            // For Property and Operation states, enforce selection from the list
+            if (currentState != RuleInputState.Value)
+            {
+                var text = GetInputText().Trim();
+                if (!string.IsNullOrEmpty(text) && !ValidateInput(text))
+                {
+                    // Clear invalid input
+                    inputBox.Text = string.Empty;
+                }
+            }
+            else if (!string.IsNullOrEmpty(GetInputText().Trim()))
+            {
+                // For Value state, create a token when focus is lost if there's text
+                CreateTokenFromInput();
+            }
         }
     }
 

@@ -12,6 +12,8 @@
       x:Key="BooleanToVisibilityConverter" />
     <local:StringToVisibilityConverter
       x:Key="StringToVisibilityConverter" />
+    <local:InverseBooleanToVisibilityConverter
+      x:Key="InverseBooleanToVisibilityConverter" />
 
     <!-- Custom style for the ComboBox -->
     <Style
@@ -41,7 +43,7 @@
                 Foreground="{TemplateBinding Foreground}"
                 MinWidth="{TemplateBinding MinWidth}"
                 Text="{Binding Text, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-
+                
               <!-- Toggle Button (dropdown button) -->
               <ToggleButton
                 x:Name="PART_ToggleButton"
@@ -90,7 +92,8 @@
       x:Name="tokenPanel"
       Background="Transparent"
       MouseDown="TokenPanel_MouseDown">
-      <!-- Tokens will be added here dynamically -->
+      <!-- Tokens will be added here dynamically 
+              SelectionChanged="InputBox_SelectionChanged"-->
       <ComboBox
         x:Name="inputBox"
         MinWidth="50"
@@ -98,9 +101,12 @@
         Background="Transparent"
         IsEditable="True"
         StaysOpenOnEdit="True"
+        IsTextSearchEnabled="True"
         Style="{StaticResource InputComboBoxStyle}"
         KeyDown="InputBox_KeyDown"
-        TextBoxBase.TextChanged="InputBox_TextChanged" />
+        TextBoxBase.TextChanged="InputBox_TextChanged"
+
+        LostFocus="InputBox_LostFocus" />
     </WrapPanel>
   </Grid>
 </UserControl>

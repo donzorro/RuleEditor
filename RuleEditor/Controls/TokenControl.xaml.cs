@@ -54,6 +54,18 @@ namespace RuleEditor.Controls
                 this.Background = null; // Reset to default
             }
         }
+        
+        // Override the Focus method to set focus to the ComboBox
+        public new bool Focus()
+        {
+            // Find the ComboBox in the visual tree
+            var comboBox = this.FindName("tokenComboBox") as ComboBox;
+            if (comboBox != null)
+            {
+                return comboBox.Focus();
+            }
+            return base.Focus();
+        }
     }
 
     public class TokenRemovedEventArgs : EventArgs
