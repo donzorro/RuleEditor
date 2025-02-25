@@ -25,6 +25,19 @@ namespace RuleEditor.Controls
         public TokenControl()
         {
             InitializeComponent();
+            
+            // Add key down handler for keyboard navigation
+            this.KeyDown += TokenControl_KeyDown;
+            
+            // Make sure the ComboBox can receive keyboard focus
+            if (this.FindName("tokenComboBox") is ComboBox comboBox)
+            {
+                comboBox.KeyDown += TokenComboBox_KeyDown;
+            }
+        }
+
+        private void TokenControl_KeyDown(object sender, KeyEventArgs e)
+        {
         }
 
         private void RemoveToken_Click(object sender, RoutedEventArgs e)
@@ -65,6 +78,70 @@ namespace RuleEditor.Controls
                 return comboBox.Focus();
             }
             return base.Focus();
+        }
+
+        private void TokenComboBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            // Handle keyboard navigation
+            if (e.Key == Key.Enter || e.Key == Key.Tab)
+            {
+                // Find the parent TokenizerControl
+                var parent = FindParent<RuleEditor.ViewModels.Version2.TokenizerControl>(this);
+                if (parent != null)
+                {
+                    // Navigate to the next token or input box
+                    parent.NavigateToNextToken(this);
+                    e.Handled = true;
+                }
+            }
+            else if (e.Key == Key.Left)
+            {
+                // Get the TextBox inside the ComboBox
+                var comboBox = sender as ComboBox;
+                var textBox = comboBox?.Template.FindName("PART_EditableTextBox", comboBox) as TextBox;
+                
+                // If at the beginning of the text, navigate to the previous token
+                if (textBox != null && textBox.CaretIndex == 0)
+                {
+                    var parent = FindParent<RuleEditor.ViewModels.Version2.TokenizerControl>(this);
+                    if (parent != null)
+                    {
+                        parent.NavigateToPreviousToken(this);
+                        e.Handled = true;
+                    }
+                }
+            }
+            else if (e.Key == Key.Right)
+            {
+                // Get the TextBox inside the ComboBox
+                var comboBox = sender as ComboBox;
+                var textBox = comboBox?.Template.FindName("PART_EditableTextBox", comboBox) as TextBox;
+                
+                // If at the end of the text, navigate to the next token
+                if (textBox != null && textBox.CaretIndex == textBox.Text.Length)
+                {
+                    var parent = FindParent<RuleEditor.ViewModels.Version2.TokenizerControl>(this);
+                    if (parent != null)
+                    {
+                        parent.NavigateToNextToken(this);
+                        e.Handled = true;
+                    }
+                }
+            }
+        }
+        
+        // Helper method to find a parent of a specific type
+        private static T FindParent<T>(DependencyObject child) where T : DependencyObject
+        {
+            DependencyObject parentObject = VisualTreeHelper.GetParent(child);
+            
+            if (parentObject == null)
+                return null;
+                
+            if (parentObject is T parent)
+                return parent;
+                
+            return FindParent<T>(parentObject);
         }
     }
 

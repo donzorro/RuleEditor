@@ -499,6 +499,91 @@ namespace RuleEditor.ViewModels.Version2
                 CreateTokenFromInput();
             }
         }
+
+        // Navigate to the next token or input box
+        public void NavigateToNextToken(TokenControl currentToken)
+        {
+            int currentIndex = tokens.IndexOf(currentToken);
+            
+            if (currentIndex >= 0 && currentIndex < tokens.Count - 1)
+            {
+                // Focus the next token
+                tokens[currentIndex + 1].Focus();
+            }
+            else
+            {
+                // Focus the input box if we're at the last token
+                inputBox.Focus();
+            }
+        }
+        
+        // Navigate to the previous token or input box
+        public void NavigateToPreviousToken(TokenControl currentToken)
+        {
+            int currentIndex = tokens.IndexOf(currentToken);
+            
+            if (currentIndex > 0)
+            {
+                // Focus the previous token
+                tokens[currentIndex - 1].Focus();
+            }
+            else if (currentIndex == 0)
+            {
+                // If we're at the first token, focus the input box
+                inputBox.Focus();
+            }
+        }
+
+        private void FilterSuggestions(string text)
+        {
+            // Store the current text
+            string currentText = inputBox.Text;
+            
+            // Get the TextBox inside the ComboBox to access the caret position
+            var textBox = inputBox.Template.FindName("PART_EditableTextBox", inputBox) as TextBox;
+            int selectionStart = textBox?.SelectionStart ?? 0;
+            
+            // Clear and repopulate the items
+            inputBox.Items.Clear();
+            
+            // Add filtered suggestions based on current state
+            switch (currentState)
+            {
+                case RuleInputState.Property:
+                    foreach (var property in validProperties.Where(p => p.StartsWith(text, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        inputBox.Items.Add(property);
+                    }
+                    // Allow logical operators if we have at least one complete rule
+                    if (HasCompleteRule())
+                    {
+                        foreach (var op in logicalOperators.Where(o => o.StartsWith(text, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            inputBox.Items.Add(op);
+                        }
+                    }
+                    break;
+                    
+                case RuleInputState.Operation:
+                    foreach (var operation in validOperations.Where(o => o.StartsWith(text, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        inputBox.Items.Add(operation);
+                    }
+                    break;
+            }
+            
+            // Restore the text
+            inputBox.Text = currentText;
+            
+            // Restore the selection position
+            if (textBox != null)
+            {
+                textBox.SelectionStart = selectionStart;
+            }
+            
+            // Show the dropdown if we have suggestions
+            inputBox.IsDropDownOpen = inputBox.Items.Count > 0;
+        }
     }
 
     public class TokenEventArgs : EventArgs
