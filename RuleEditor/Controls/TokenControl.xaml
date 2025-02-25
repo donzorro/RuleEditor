@@ -7,7 +7,8 @@
   xmlns:local="clr-namespace:RuleEditor.Controls"
   mc:Ignorable="d"
   d:DesignHeight="450"
-  d:DesignWidth="800">
+  d:DesignWidth="800"
+  d:DataContext="{x:Type local:TokenViewModel}">
   <Border
     x:Name="tokenBorder"
     CornerRadius="3"
@@ -18,10 +19,11 @@
       Orientation="Horizontal">
       <ComboBox
         Text="{Binding Text}"
+        IsEditable="True"
         ItemsSource="{Binding Suggestions}" />
-      <Button
+      <!--<Button
         Content="X"
-        Click="RemoveToken_Click" />
+        Click="RemoveToken_Click" />-->
     </StackPanel>
   </Border>
 </UserControl>
