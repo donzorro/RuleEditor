@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -18,7 +19,7 @@ namespace RuleEditor.ViewModels
     public class RuleEditorViewModel : ViewModelBase
     {
         private Rule _currentRule;
-        private string _expression;
+        private string _expressionCode;
         private string _validationMessage;
         private bool _isValid;
         private ObservableCollection<RulePropertyInfo> _availableProperties;
@@ -38,7 +39,7 @@ namespace RuleEditor.ViewModels
             AvailableProperties = new ObservableCollection<RulePropertyInfo>();
             UnknownProperties = new ObservableCollection<string>();
             IsValid = true;
-            Expression = string.Empty;
+            ExpressionCode = string.Empty;
             ExpressionDocument = new TextDocument();
             FormatExpressionCommand = new ActionCommand(ExecuteFormatExpression);
         }
@@ -49,12 +50,14 @@ namespace RuleEditor.ViewModels
             set => SetProperty(ref _currentRule, value);
         }
 
-        public string Expression
+        public Type TargetType => _targetType;
+
+        public string ExpressionCode
         {
-            get => _expression;
+            get => _expressionCode;
             set
             {
-                if (SetProperty(ref _expression, value))
+                if (SetProperty(ref _expressionCode, value))
                 {
                     ValidateExpression();
                 }
@@ -95,13 +98,13 @@ namespace RuleEditor.ViewModels
 
         private void ExecuteFormatExpression()
         {
-            if (string.IsNullOrWhiteSpace(Expression)) return;
+            if (string.IsNullOrWhiteSpace(ExpressionCode)) return;
 
             try
             {
-                var tokens = TokenizeExpression(Expression);
+                var tokens = TokenizeExpression(ExpressionCode);
                 var formattedExpression = FormatTokens(tokens);
-                Expression = formattedExpression;
+                ExpressionCode = formattedExpression;
                 ExpressionDocument.Text = formattedExpression;
             }
             catch (Exception ex)
@@ -157,7 +160,7 @@ namespace RuleEditor.ViewModels
 
         public void ValidateExpression()
         {
-            if (string.IsNullOrWhiteSpace(Expression))
+            if (string.IsNullOrWhiteSpace(ExpressionCode))
             {
                 IsValid = false;
                 ValidationMessage = "Expression cannot be empty.";
@@ -168,7 +171,7 @@ namespace RuleEditor.ViewModels
             try
             {
                 // Normalize the expression, including multi-line handling
-                var normalizedExpression = NormalizeExpression(Expression);
+                var normalizedExpression = NormalizeExpression(ExpressionCode);
                 
                 // Validate parentheses balance
                 if (!AreParenthesesBalanced(normalizedExpression))
@@ -586,201 +589,240 @@ namespace RuleEditor.ViewModels
             return System.Text.RegularExpressions.Regex.IsMatch(token, @"^[a-zA-Z][a-zA-Z0-9]*$");
         }
 
+        private static readonly ConcurrentDictionary<string, Func<object, bool>> _expressionCache 
+            = new ConcurrentDictionary<string, Func<object, bool>>();
+
+        private const int MAX_EXPRESSION_CACHE_SIZE = 1000;
+
         public Func<object, bool> CompileExpression()
         {
-            if (string.IsNullOrWhiteSpace(Expression))
+            if (string.IsNullOrWhiteSpace(ExpressionCode))
             {
                 return _ => false;
             }
 
+            // Normalize and cache the expression
+            var normalizedExpression = NormalizeExpression(ExpressionCode);
+            
+            return _expressionCache.GetOrAdd(
+                normalizedExpression, 
+                CreateHighPerformanceExpressionFunc
+            );
+        }
+
+        private Func<object, bool> CreateHighPerformanceExpressionFunc(string normalizedExpression)
+        {
             try
             {
-                // Normalize the expression
-                var normalizedExpression = NormalizeExpression(Expression);
+                // Limit cache size
+                if (_expressionCache.Count > MAX_EXPRESSION_CACHE_SIZE)
+                {
+                    // Remove oldest entries
+                    while (_expressionCache.Count > MAX_EXPRESSION_CACHE_SIZE)
+                    {
+                        _expressionCache.TryRemove(_expressionCache.Keys.First(), out _);
+                    }
+                }
 
-                // Create a lambda that uses dynamic property access
-                return CreateDynamicExpressionFunc(normalizedExpression);
+                // Tokenize the normalized expression
+                var tokens = Tokenize(normalizedExpression);
+
+                
+                // Create parameter for input object
+                var parameter = System.Linq.Expressions.Expression.Parameter(typeof(object), "input");
+                
+                // Convert parameter to the target type
+                var convertedParam = System.Linq.Expressions.Expression.Convert(parameter, TargetType);
+
+                // Build the full expression tree
+                var expressionTree = BuildOptimizedExpressionTree(tokens, convertedParam);
+
+                // Compile to a lambda function
+                return System.Linq.Expressions.Expression.Lambda<Func<object, bool>>(expressionTree, parameter).Compile();
             }
             catch (Exception ex)
             {
-                // Log or handle compilation error
                 ValidationMessage = $"Error compiling expression: {ex.Message}";
                 return _ => false;
             }
         }
 
-        private Func<object, bool> CreateDynamicExpressionFunc(string normalizedExpression)
+        private System.Linq.Expressions.Expression BuildOptimizedExpressionTree(
+            List<string> tokens, 
+            System.Linq.Expressions.Expression parameter)
         {
-            // Tokenize the normalized expression
-            var tokens = Tokenize(normalizedExpression);
-
-            // Return a function that evaluates the expression
-            return (input) => EvaluateExpression(tokens, input);
-        }
-
-        private bool EvaluateExpression(List<string> tokens, object input)
-        {
-            bool currentResult = true;
-            string currentLogicalOperator = "AND";
+            // Build the expression tree
+            System.Linq.Expressions.Expression currentExpression = 
+                System.Linq.Expressions.Expression.Constant(true);
 
             for (int i = 0; i < tokens.Count; i++)
             {
-                // Skip logical operators
                 if (tokens[i] == "AND" || tokens[i] == "OR")
                 {
-                    currentLogicalOperator = tokens[i];
                     continue;
                 }
 
-                // Parse and evaluate the condition
-                bool conditionResult = EvaluateCondition(tokens, ref i, input);
+                // Parse the current condition
+                var condition = ParseOptimizedCondition(tokens, ref i, parameter);
 
-                // Apply logical operator
-                if (currentLogicalOperator == "AND")
-                {
-                    currentResult &= conditionResult;
-                }
-                else // OR
-                {
-                    currentResult |= conditionResult;
-                }
+                // Combine with previous expression using logical operators
+                currentExpression = i > 0 && tokens[i - 1] == "AND"
+                    ? System.Linq.Expressions.Expression.AndAlso(currentExpression, condition)
+                    : System.Linq.Expressions.Expression.OrElse(currentExpression, condition);
             }
 
-            return currentResult;
+            return currentExpression;
         }
 
-        private bool EvaluateCondition(List<string> tokens, ref int index, object input)
+        private System.Linq.Expressions.Expression ParseOptimizedCondition(
+            List<string> tokens, 
+            ref int index, 
+            System.Linq.Expressions.Expression parameter)
         {
             // Handle parenthesized expressions
             if (tokens[index] == "(")
             {
-                // Find matching closing parenthesis
+                // Find the matching closing parenthesis
                 int closingIndex = FindClosingParenthesis(tokens, index);
                 var innerTokens = tokens.GetRange(index + 1, closingIndex - index - 1);
                 
                 index = closingIndex;
-                return EvaluateExpression(innerTokens, input);
+                return BuildOptimizedExpressionTree(innerTokens, 
+                    (System.Linq.Expressions.ParameterExpression)parameter);
             }
 
             // Ensure we have enough tokens for a condition
             if (index + 2 >= tokens.Count)
                 throw new InvalidOperationException("Incomplete condition");
 
-            string propertyName = tokens[index];
-            string op = tokens[index + 1];
-            string value = tokens[index + 2];
+            var property = tokens[index];
+            var op = tokens[index + 1];
+            var value = tokens[index + 2];
 
             index += 2;
-            return EvaluateComparison(input, propertyName, op, value);
+            return BuildOptimizedComparisonExpression(property, op, value, parameter);
         }
 
-        private bool EvaluateComparison(object input, string propertyName, string op, string value)
+        private System.Linq.Expressions.Expression BuildOptimizedComparisonExpression(
+            string propertyName, 
+            string op, 
+            string value, 
+            System.Linq.Expressions.Expression parameter)
         {
-            // Get the property value dynamically
-            object propertyValue = GetPropertyValue(input, propertyName);
+            // Get property access expression
+            var propertyExpression = CreatePropertyAccessExpression(parameter, propertyName);
+        
+            // Convert value
+            var convertedValue = ConvertValueExpression(value, propertyExpression.Type);
 
-            // Remove quotes from string values
-            value = value.Trim('\'', '"');
-
-            // Convert value to appropriate type
-            object convertedValue = ConvertValue(value, propertyValue?.GetType() ?? typeof(string));
-
-            // Perform comparison
+            // Build comparison expression
             return op.ToUpper() switch
             {
-                "==" => Equals(propertyValue, convertedValue),
-                "!=" => !Equals(propertyValue, convertedValue),
-                ">" => CompareValues(propertyValue, convertedValue) > 0,
-                "<" => CompareValues(propertyValue, convertedValue) < 0,
-                ">=" => CompareValues(propertyValue, convertedValue) >= 0,
-                "<=" => CompareValues(propertyValue, convertedValue) <= 0,
-                "CONTAINS" => propertyValue?.ToString().Contains(convertedValue?.ToString() ?? "") ?? false,
-                "STARTSWITH" => propertyValue?.ToString().StartsWith(convertedValue?.ToString() ?? "") ?? false,
-                "ENDSWITH" => propertyValue?.ToString().EndsWith(convertedValue?.ToString() ?? "") ?? false,
+                "==" => System.Linq.Expressions.Expression.Equal(propertyExpression, convertedValue),
+                "!=" => System.Linq.Expressions.Expression.NotEqual(propertyExpression, convertedValue),
+                ">" => System.Linq.Expressions.Expression.GreaterThan(propertyExpression, convertedValue),
+                "<" => System.Linq.Expressions.Expression.LessThan(propertyExpression, convertedValue),
+                ">=" => System.Linq.Expressions.Expression.GreaterThanOrEqual(propertyExpression, convertedValue),
+                "<=" => System.Linq.Expressions.Expression.LessThanOrEqual(propertyExpression, convertedValue),
+                "CONTAINS" => BuildStringMethodExpression(propertyExpression, "Contains", convertedValue),
+                "STARTSWITH" => BuildStringMethodExpression(propertyExpression, "StartsWith", convertedValue),
+                "ENDSWITH" => BuildStringMethodExpression(propertyExpression, "EndsWith", convertedValue),
                 _ => throw new InvalidOperationException($"Unsupported operator: {op}")
             };
         }
 
-        private object GetPropertyValue(object input, string propertyName)
+        private System.Linq.Expressions.Expression CreatePropertyAccessExpression(
+            System.Linq.Expressions.Expression parameter, 
+            string propertyName)
         {
-            if (input == null)
-                return null;
-
-            // Handle nested properties (e.g., "Address.City")
+            // Handle nested properties
             var parts = propertyName.Split('.');
-            object currentValue = input;
+            System.Linq.Expressions.Expression currentExpression = parameter;
 
             foreach (var part in parts)
             {
-                if (currentValue == null)
-                    return null;
-
-                var type = currentValue.GetType();
-                var property = type.GetProperty(part, 
+                var property = currentExpression.Type.GetProperty(part, 
                     BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
 
                 if (property == null)
-                    throw new ArgumentException($"Property '{part}' not found on type {type.Name}");
+                    throw new ArgumentException($"Property '{part}' not found on type {currentExpression.Type.Name}");
 
-                currentValue = property.GetValue(currentValue);
+                currentExpression = System.Linq.Expressions.Expression.Property(currentExpression, property);
             }
 
-            return currentValue;
+            return currentExpression;
         }
 
-        private int CompareValues(object a, object b)
-        {
-            // Handle null cases
-            if (a == null && b == null) return 0;
-            if (a == null) return -1;
-            if (b == null) return 1;
-
-            // Use IComparable if available
-            if (a is IComparable comparable)
-            {
-                return comparable.CompareTo(b);
-            }
-
-            // Fallback to string comparison
-            return string.Compare(a.ToString(), b.ToString(), StringComparison.Ordinal);
-        }
-
-        private object ConvertValue(string value, Type targetType)
+        private System.Linq.Expressions.Expression ConvertValueExpression(
+            string value, 
+            Type targetType)
         {
             // Remove quotes
             value = value.Trim('\'', '"');
 
-            // Convert to target type
-            if (targetType == typeof(string))
-                return value;
-
-            if (targetType == typeof(int))
-                return int.Parse(value);
-
-            if (targetType == typeof(double))
-                return double.Parse(value);
-
-            if (targetType == typeof(bool))
-                return bool.Parse(value);
-
-            if (targetType == typeof(decimal))
-                return decimal.Parse(value);
-
-            // Add more type conversions as needed
-            return value;
+            // Convert to constant expression of the correct type
+            object convertedValue = ConvertValue(value, targetType);
+            return System.Linq.Expressions.Expression.Constant(convertedValue, targetType);
         }
 
-        private int FindClosingParenthesis(List<string> tokens, int startIndex)
+        private System.Linq.Expressions.Expression BuildStringMethodExpression(
+            System.Linq.Expressions.Expression propertyExpression, 
+            string methodName, 
+            System.Linq.Expressions.Expression valueExpression)
         {
-            int depth = 0;
-            for (int i = startIndex; i < tokens.Count; i++)
+            // Ensure property is a string
+            if (propertyExpression.Type != typeof(string))
+                throw new InvalidOperationException($"Cannot use {methodName} on non-string property");
+
+            // Call string method
+            var method = typeof(string).GetMethod(methodName, new[] { typeof(string) });
+            return System.Linq.Expressions.Expression.Call(propertyExpression, method, valueExpression);
+        }
+
+        private object ConvertValue(string value, Type targetType)
+        {
+            // Handle null or empty string
+            if (string.IsNullOrEmpty(value))
             {
-                if (tokens[i] == "(") depth++;
-                if (tokens[i] == ")") depth--;
-                
-                if (depth == 0) return i;
+                return null;
             }
-            throw new InvalidOperationException("Unbalanced parentheses");
+
+            // Convert to target type
+            try
+            {
+                // Handle nullable types
+                var underlyingType = Nullable.GetUnderlyingType(targetType) ?? targetType;
+
+                // Special handling for different types
+                if (underlyingType == typeof(string))
+                    return value;
+
+                if (underlyingType == typeof(int) || underlyingType == typeof(Int32))
+                    return Convert.ToInt32(value);
+
+                if (underlyingType == typeof(double) || underlyingType == typeof(Double))
+                    return Convert.ToDouble(value);
+
+                if (underlyingType == typeof(bool) || underlyingType == typeof(Boolean))
+                    return Convert.ToBoolean(value);
+
+                if (underlyingType == typeof(decimal))
+                    return Convert.ToDecimal(value);
+
+                if (underlyingType == typeof(DateTime))
+                    return Convert.ToDateTime(value);
+
+                if (underlyingType.IsEnum)
+                    return Enum.Parse(underlyingType, value, true);
+
+                // Fallback to default conversion
+                return Convert.ChangeType(value, underlyingType);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot convert '{value}' to {targetType.Name}: {ex.Message}", ex);
+            }
         }
 
         public void SetTargetObject<T>(T example)
@@ -825,6 +867,19 @@ namespace RuleEditor.ViewModels
         {
             var logicalOperators = new[] { "AND", "OR" };
             return logicalOperators.Contains(token.ToUpper());
+        }
+
+        private int FindClosingParenthesis(List<string> tokens, int startIndex)
+        {
+            int depth = 0;
+            for (int i = startIndex; i < tokens.Count; i++)
+            {
+                if (tokens[i] == "(") depth++;
+                if (tokens[i] == ")") depth--;
+                
+                if (depth == 0) return i;
+            }
+            throw new InvalidOperationException("Unbalanced parentheses in expression");
         }
     }
 }

@@ -26,15 +26,26 @@ namespace RuleEditor
     /// </summary>
     public partial class MainWindow : Window
     {
-       
+       private MainViewModel vm = new MainViewModel();
         public MainWindow()
         {
-            this.DataContext = new MainViewModel();
+            this.DataContext = vm;
             InitializeComponent();
             
            
         }
 
+        private void Button_Click(object sender, RoutedEventArgs e)
+        {
+            var myObject = new TestObject 
+            {
+                Name = "John Doe", Age = 25, IsActive = true, Price = 99.99m 
+            };
+
+            var func = vm.RuleEditorViewModel.CompileExpression();
+            bool result = func(myObject);  // Fast evaluation
+            MessageBox.Show(result.ToString());
+        }
     }
 
     public class ValueCompletionData : ICompletionData

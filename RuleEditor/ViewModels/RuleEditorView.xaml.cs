@@ -47,9 +47,9 @@ namespace RuleEditor.ViewModels
             ExpressionEditor.TextChanged += ExpressionEditor_TextChanged;
 
             // Set initial text if needed
-            if (DataContext is MainViewModel vm && !string.IsNullOrEmpty(vm.RuleEditorViewModel.Expression))
+            if (DataContext is MainViewModel vm && !string.IsNullOrEmpty(vm.RuleEditorViewModel.ExpressionCode))
             {
-                ExpressionEditor.Text = vm.RuleEditorViewModel.Expression;
+                ExpressionEditor.Text = vm.RuleEditorViewModel.ExpressionCode;
             }
         }
 
@@ -109,8 +109,8 @@ namespace RuleEditor.ViewModels
             var tokens = lineText.Split(new[] { ' ', '(', ')', '"', '\'' }, StringSplitOptions.RemoveEmptyEntries);
 
             // Always show completion at the start of a line or after an operator
-            if (tokens.Length == 0 ||
-                (tokens.Length > 0 && IsOperator(tokens[tokens.Length - 1])))
+            if (tokens.Length == 1 ||
+                (tokens.Length > 1 && IsOperator(tokens[tokens.Length - 1])))
             {
                 return true;
             }
@@ -336,7 +336,7 @@ namespace RuleEditor.ViewModels
             if (DataContext is MainViewModel viewModel)
             {
                 // Update the Expression property in the ViewModel
-                viewModel.RuleEditorViewModel.Expression = ExpressionEditor.Text;
+                viewModel.RuleEditorViewModel.ExpressionCode = ExpressionEditor.Text;
 
                 // Update the Document property if it exists
                 if (viewModel.RuleEditorViewModel.ExpressionDocument != null)

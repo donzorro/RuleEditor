@@ -23,10 +23,10 @@
         Value="14" />
       <Setter
         Property="Background"
-        Value="#1E1E1E" />
+        Value="White" />
       <Setter
         Property="Foreground"
-        Value="#DCDCDC" />
+        Value="Black" />
       <Setter
         Property="ShowLineNumbers"
         Value="True" />
@@ -94,6 +94,7 @@
         Style="{StaticResource EditorStyle}"
         SyntaxHighlighting="C#"
         ShowLineNumbers="True"
+        Background="White"
         Document="{Binding RuleEditorViewModel.ExpressionDocument, Mode=TwoWay}"
         TextChanged="ExpressionEditor_TextChanged">
       </avalonedit:TextEditor>

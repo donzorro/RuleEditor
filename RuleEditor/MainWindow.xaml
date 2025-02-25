@@ -12,5 +12,17 @@
   Title="Expression Rule Editor"
   Height="600"
   Width="800">
-  <viewmodels:RuleEditorView />
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition
+        Height="*" />
+      <RowDefinition
+        Height="Auto" />
+    </Grid.RowDefinitions>
+    <viewmodels:RuleEditorView />
+    <Button
+      Content="Sample Evaluate"
+      Click="Button_Click"
+      Grid.Row="1" />
+  </Grid>
 </Window>
