@@ -48,6 +48,25 @@ namespace RuleEditor.ViewModels.Version2
         }
     }
 
+    // Converter to show watermark when text is empty
+    public class WatermarkVisibilityConverter : IMultiValueConverter
+    {
+        public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (values.Length == 2 && values[0] is string text && values[1] is bool hasFocus)
+            {
+                // Show watermark when text is empty and control doesn't have focus
+                return string.IsNullOrEmpty(text) ? Visibility.Visible : Visibility.Collapsed;
+            }
+            return Visibility.Collapsed;
+        }
+        
+        public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
     // Enum to track the current state of rule creation
     public enum RuleInputState
     {
@@ -65,6 +84,7 @@ namespace RuleEditor.ViewModels.Version2
 
         private List<TokenControl> tokens = new List<TokenControl>();
         private RuleInputState currentState = RuleInputState.Property;
+        private string watermarkText = "Select a property";
         
         // Lists of valid properties and operations
         private List<string> validProperties = new List<string>
@@ -167,6 +187,30 @@ namespace RuleEditor.ViewModels.Version2
                 var lastToken = tokens[tokens.Count - 1];
                 Token_Removed(lastToken, new TokenRemovedEventArgs(lastToken));
                 e.Handled = true;
+            }
+            else if (e.Key == Key.Left)
+            {
+                // Get the TextBox inside the ComboBox
+                var textBox = inputBox.Template.FindName("PART_EditableTextBox", inputBox) as TextBox;
+                
+                // If at the beginning of the text and we have tokens, navigate to the last token
+                if (textBox != null && textBox.CaretIndex == 0 && tokens.Count > 0)
+                {
+                    tokens[tokens.Count - 1].Focus();
+                    e.Handled = true;
+                }
+            }
+            else if (e.Key == Key.Right)
+            {
+                // Get the TextBox inside the ComboBox
+                var textBox = inputBox.Template.FindName("PART_EditableTextBox", inputBox) as TextBox;
+                
+                // If at the end of the text and we have tokens, navigate to the first token
+                if (textBox != null && textBox.CaretIndex == textBox.Text.Length && tokens.Count > 0)
+                {
+                    tokens[0].Focus();
+                    e.Handled = true;
+                }
             }
         }
 
@@ -509,11 +553,27 @@ namespace RuleEditor.ViewModels.Version2
             {
                 // Focus the next token
                 tokens[currentIndex + 1].Focus();
+                
+                // Position caret at the beginning of the text in the next token
+                var nextToken = tokens[currentIndex + 1];
+                var comboBox = nextToken.FindName("tokenComboBox") as ComboBox;
+                var textBox = comboBox?.Template.FindName("PART_EditableTextBox", comboBox) as TextBox;
+                if (textBox != null)
+                {
+                    textBox.CaretIndex = 0;
+                }
             }
             else
             {
                 // Focus the input box if we're at the last token
                 inputBox.Focus();
+                
+                // Position caret at the beginning of the text in the input box
+                var textBox = inputBox.Template.FindName("PART_EditableTextBox", inputBox) as TextBox;
+                if (textBox != null)
+                {
+                    textBox.CaretIndex = 0;
+                }
             }
         }
         
@@ -526,63 +586,57 @@ namespace RuleEditor.ViewModels.Version2
             {
                 // Focus the previous token
                 tokens[currentIndex - 1].Focus();
+                
+                // Position caret at the end of the text in the previous token
+                var prevToken = tokens[currentIndex - 1];
+                var comboBox = prevToken.FindName("tokenComboBox") as ComboBox;
+                var textBox = comboBox?.Template.FindName("PART_EditableTextBox", comboBox) as TextBox;
+                if (textBox != null)
+                {
+                    textBox.CaretIndex = textBox.Text.Length;
+                }
             }
             else if (currentIndex == 0)
             {
                 // If we're at the first token, focus the input box
                 inputBox.Focus();
+                
+                // Position caret at the end of the text in the input box
+                var textBox = inputBox.Template.FindName("PART_EditableTextBox", inputBox) as TextBox;
+                if (textBox != null)
+                {
+                    textBox.CaretIndex = textBox.Text.Length;
+                }
             }
-        }
-
-        private void FilterSuggestions(string text)
+        }       
+        
+        // Handle PreviewKeyDown for the input box to ensure arrow key navigation works properly
+        private void InputBox_PreviewKeyDown(object sender, KeyEventArgs e)
         {
-            // Store the current text
-            string currentText = inputBox.Text;
-            
-            // Get the TextBox inside the ComboBox to access the caret position
-            var textBox = inputBox.Template.FindName("PART_EditableTextBox", inputBox) as TextBox;
-            int selectionStart = textBox?.SelectionStart ?? 0;
-            
-            // Clear and repopulate the items
-            inputBox.Items.Clear();
-            
-            // Add filtered suggestions based on current state
-            switch (currentState)
+            if (e.Key == Key.Left)
             {
-                case RuleInputState.Property:
-                    foreach (var property in validProperties.Where(p => p.StartsWith(text, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        inputBox.Items.Add(property);
-                    }
-                    // Allow logical operators if we have at least one complete rule
-                    if (HasCompleteRule())
-                    {
-                        foreach (var op in logicalOperators.Where(o => o.StartsWith(text, StringComparison.OrdinalIgnoreCase)))
-                        {
-                            inputBox.Items.Add(op);
-                        }
-                    }
-                    break;
-                    
-                case RuleInputState.Operation:
-                    foreach (var operation in validOperations.Where(o => o.StartsWith(text, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        inputBox.Items.Add(operation);
-                    }
-                    break;
+                // Get the TextBox inside the ComboBox
+                var textBox = inputBox.Template.FindName("PART_EditableTextBox", inputBox) as TextBox;
+                
+                // If at the beginning of the text and we have tokens, navigate to the last token
+                if (textBox != null && textBox.CaretIndex == 0 && tokens.Count > 0)
+                {
+                    tokens[tokens.Count - 1].Focus();
+                    e.Handled = true;
+                }
             }
-            
-            // Restore the text
-            inputBox.Text = currentText;
-            
-            // Restore the selection position
-            if (textBox != null)
+            else if (e.Key == Key.Right)
             {
-                textBox.SelectionStart = selectionStart;
+                // Get the TextBox inside the ComboBox
+                var textBox = inputBox.Template.FindName("PART_EditableTextBox", inputBox) as TextBox;
+                
+                // If at the end of the text and we have tokens, navigate to the first token
+                if (textBox != null && textBox.CaretIndex == textBox.Text.Length && tokens.Count > 0)
+                {
+                    tokens[0].Focus();
+                    e.Handled = true;
+                }
             }
-            
-            // Show the dropdown if we have suggestions
-            inputBox.IsDropDownOpen = inputBox.Items.Count > 0;
         }
     }
 

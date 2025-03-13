@@ -14,6 +14,8 @@
       x:Key="StringToVisibilityConverter" />
     <local:InverseBooleanToVisibilityConverter
       x:Key="InverseBooleanToVisibilityConverter" />
+    <local:WatermarkVisibilityConverter
+      x:Key="WatermarkVisibilityConverter" />
 
     <!-- Custom style for the ComboBox -->
     <Style
@@ -43,7 +45,28 @@
                 Foreground="{TemplateBinding Foreground}"
                 MinWidth="{TemplateBinding MinWidth}"
                 Text="{Binding Text, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                
+
+              <!-- Watermark TextBlock -->
+              <TextBlock
+                x:Name="WatermarkTextBlock"
+                Grid.Column="0"
+                Margin="3,0,0,0"
+                Text="Select a property"
+                Foreground="Gray"
+                VerticalAlignment="Center">
+                <TextBlock.Visibility>
+                  <MultiBinding
+                    Converter="{StaticResource WatermarkVisibilityConverter}">
+                    <Binding
+                      ElementName="PART_EditableTextBox"
+                      Path="Text" />
+                    <Binding
+                      ElementName="PART_EditableTextBox"
+                      Path="IsFocused" />
+                  </MultiBinding>
+                </TextBlock.Visibility>
+              </TextBlock>
+
               <!-- Toggle Button (dropdown button) -->
               <ToggleButton
                 x:Name="PART_ToggleButton"
@@ -84,7 +107,7 @@
       </Setter>
     </Style>
 
-    
+
   </UserControl.Resources>
 
   <Grid>
@@ -103,9 +126,8 @@
         StaysOpenOnEdit="True"
         IsTextSearchEnabled="True"
         Style="{StaticResource InputComboBoxStyle}"
-        KeyDown="InputBox_KeyDown"
+        PreviewKeyDown="InputBox_KeyDown"
         TextBoxBase.TextChanged="InputBox_TextChanged"
-
         LostFocus="InputBox_LostFocus" />
     </WrapPanel>
   </Grid>

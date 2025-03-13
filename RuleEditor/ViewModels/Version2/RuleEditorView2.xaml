@@ -84,114 +84,83 @@
           Height="*" />
       </Grid.RowDefinitions>
 
-      <!-- Available Properties Section -->
       <TextBlock
         Grid.Row="0"
-        Text="Available Properties"
-        FontWeight="Bold"
-        Margin="0,0,0,5" />
-
-      <ListBox
-        Grid.Row="1"
-        x:Name="propertiesList"
-        ItemsSource="{Binding AvailableProperties}"
-        Margin="0,0,0,10">
-        <ListBox.ItemTemplate>
-          <DataTemplate>
-            <StackPanel>
-              <TextBlock
-                Text="{Binding Name}"
-                FontWeight="SemiBold" />
-              <TextBlock
-                Text="{Binding Type.Name}"
-                Foreground="Gray"
-                FontSize="11" />
-            </StackPanel>
-          </DataTemplate>
-        </ListBox.ItemTemplate>
-      </ListBox>
-
-      <!-- Help Section -->
-      <TextBlock
-        Grid.Row="2"
         Text="Expression Help"
         FontWeight="Bold"
         Margin="0,0,0,5" />
 
-      <ScrollViewer
-        Grid.Row="3"
-        VerticalScrollBarVisibility="Auto">
-        <StackPanel>
-          <GroupBox
-            Header="Operators">
-            <StackPanel
-              Margin="5">
-              <TextBlock
-                TextWrapping="Wrap"
-                Margin="0,0,0,5">
+      <StackPanel
+        Grid.Row="1">
+        <GroupBox
+          Header="Operators">
+          <StackPanel
+            Margin="5">
+            <TextBlock
+              TextWrapping="Wrap"
+              Margin="0,0,0,5">
                   <Run
-                  FontWeight="Bold">Available Operators:</Run>
+                FontWeight="Bold">Available Operators:</Run>
                   <LineBreak />
                   <Run>Comparison: > &lt; >= &lt;= == !=</Run>
                   <LineBreak />
                   <Run>String: Contains, StartsWith, EndsWith</Run>
                   <LineBreak />
                   <Run>Logical: AND, OR, NOT</Run>
-              </TextBlock>
-              <TextBlock
-                TextWrapping="Wrap"
-                Margin="0,5">
+            </TextBlock>
+            <TextBlock
+              TextWrapping="Wrap"
+              Margin="0,5">
                   <Run
-                  FontWeight="Bold">Examples:</Run>
+                FontWeight="Bold">Examples:</Run>
                   <LineBreak />
                   <Run>Age > 18</Run>
                   <LineBreak />
                   <Run>Name.Contains('John')</Run>
                   <LineBreak />
                   <Run>(Price >= 100 AND Category == 'Electronics')</Run>
-              </TextBlock>
-            </StackPanel>
-          </GroupBox>
+            </TextBlock>
+          </StackPanel>
+        </GroupBox>
 
-          <GroupBox
-            Header="Examples"
-            Margin="0,5">
-            <StackPanel
-              Margin="5">
-              <TextBlock
-                TextWrapping="Wrap"
-                Text="Age > 18 AND Name CONTAINS 'John'" />
-              <TextBlock
-                TextWrapping="Wrap"
-                Margin="0,5"
-                Text="Balance >= 1000 OR IsActive == true" />
-              <TextBlock
-                TextWrapping="Wrap"
-                Margin="0,5"
-                Text="Email ENDSWITH '@company.com'" />
-            </StackPanel>
-          </GroupBox>
+        <GroupBox
+          Header="Examples"
+          Margin="0,5">
+          <StackPanel
+            Margin="5">
+            <TextBlock
+              TextWrapping="Wrap"
+              Text="Age > 18 AND Name CONTAINS 'John'" />
+            <TextBlock
+              TextWrapping="Wrap"
+              Margin="0,5"
+              Text="Balance >= 1000 OR IsActive == true" />
+            <TextBlock
+              TextWrapping="Wrap"
+              Margin="0,5"
+              Text="Email ENDSWITH '@company.com'" />
+          </StackPanel>
+        </GroupBox>
 
-          <GroupBox
-            Header="Tips"
-            Margin="0,5">
-            <StackPanel
-              Margin="5">
-              <TextBlock
-                TextWrapping="Wrap"
-                Text="• Use quotes for text values" />
-              <TextBlock
-                TextWrapping="Wrap"
-                Margin="0,5"
-                Text="• Each line is treated as AND" />
-              <TextBlock
-                TextWrapping="Wrap"
-                Margin="0,5"
-                Text="• Use parentheses for complex expressions" />
-            </StackPanel>
-          </GroupBox>
-        </StackPanel>
-      </ScrollViewer>
+        <GroupBox
+          Header="Tips"
+          Margin="0,5">
+          <StackPanel
+            Margin="5">
+            <TextBlock
+              TextWrapping="Wrap"
+              Text="• Use quotes for text values" />
+            <TextBlock
+              TextWrapping="Wrap"
+              Margin="0,5"
+              Text="• Each line is treated as AND" />
+            <TextBlock
+              TextWrapping="Wrap"
+              Margin="0,5"
+              Text="• Use parentheses for complex expressions" />
+          </StackPanel>
+        </GroupBox>
+      </StackPanel>
     </Grid>
   </Grid>
 </UserControl>

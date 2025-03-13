@@ -33,6 +33,7 @@ namespace RuleEditor.Controls
             if (this.FindName("tokenComboBox") is ComboBox comboBox)
             {
                 comboBox.KeyDown += TokenComboBox_KeyDown;
+                comboBox.PreviewKeyDown += TokenComboBox_PreviewKeyDown;
             }
         }
 
@@ -94,7 +95,12 @@ namespace RuleEditor.Controls
                     e.Handled = true;
                 }
             }
-            else if (e.Key == Key.Left)
+        }
+
+        private void TokenComboBox_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            // Handle keyboard navigation
+            if (e.Key == Key.Left)
             {
                 // Get the TextBox inside the ComboBox
                 var comboBox = sender as ComboBox;
