@@ -187,8 +187,21 @@ namespace RuleEditor.ViewModels.Version2
                 sb.Append(currentInput);
             }
             
+            // Get the complete expression
+            string expressionText = sb.ToString();
+            
             // Update the expression text box
-            expressionTextBox.Text = sb.ToString();
+            expressionTextBox.Text = expressionText;
+            
+            // Validate the expression and provide visual feedback
+            bool isValid = _viewModel.ValidateExpression(expressionText);
+            
+            // Update the validation message
+            validationMessage.Text = isValid ? "Expression is valid" : "Expression is invalid";
+            validationMessage.Foreground = isValid ? Brushes.Green : Brushes.Red;
+            
+            // Also update the expression text box background to provide visual feedback
+            expressionTextBox.Background = isValid ? Brushes.LightGreen : Brushes.LightPink;
         }
 
         private void FormatButton_Click(object sender, RoutedEventArgs e)

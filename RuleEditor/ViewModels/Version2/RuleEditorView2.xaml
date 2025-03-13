@@ -74,20 +74,6 @@
         Grid.Row="2"
         Orientation="Horizontal"
         Margin="5">
-        <Button
-          x:Name="formatButton"
-          Content="Format Expression"
-          Click="FormatButton_Click"
-          Margin="0,0,5,0"
-          Padding="5,2" />
-
-        <Button
-          x:Name="validateButton"
-          Content="Validate"
-          Click="ValidateButton_Click"
-          Margin="0,0,5,0"
-          Padding="5,2" />
-
         <TextBlock
           x:Name="validationMessage"
           VerticalAlignment="Center"
@@ -100,10 +86,6 @@
       Grid.Column="1"
       Margin="5">
       <Grid.RowDefinitions>
-        <RowDefinition
-          Height="Auto" />
-        <RowDefinition
-          Height="*" />
         <RowDefinition
           Height="Auto" />
         <RowDefinition
