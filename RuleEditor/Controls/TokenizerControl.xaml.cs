@@ -9,6 +9,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Input;
+using System.Windows.Media;
 
 namespace RuleEditor.ViewModels.Version2
 {
@@ -81,6 +82,7 @@ namespace RuleEditor.ViewModels.Version2
         public event EventHandler<TokenEventArgs> TokenRemoved;
         public event EventHandler<TokenEventArgs> TokenChanged;
         public event EventHandler<TextChangedEventArgs> TextChanged;
+        public event EventHandler ExpressionChanged;
 
         private List<TokenControl> tokens = new List<TokenControl>();
         private RuleInputState currentState = RuleInputState.Property;
@@ -270,6 +272,8 @@ namespace RuleEditor.ViewModels.Version2
             
             // Notify that a token was added
             TokenAdded?.Invoke(this, new TokenEventArgs(token));
+            
+            NotifyExpressionChanged();
         }
         
         private bool ValidateInput(string text)
@@ -337,6 +341,8 @@ namespace RuleEditor.ViewModels.Version2
             
             // Notify that a token was removed
             TokenRemoved?.Invoke(this, new TokenEventArgs(token));
+            
+            NotifyExpressionChanged();
         }
         
         private void RecalculateState()
@@ -488,6 +494,8 @@ namespace RuleEditor.ViewModels.Version2
             
             // Update suggestions for the current state
             UpdateComboBoxSuggestions();
+            
+            NotifyExpressionChanged();
         }
 
         private void TokenPanel_MouseDown(object sender, MouseButtonEventArgs e)
@@ -577,6 +585,19 @@ namespace RuleEditor.ViewModels.Version2
             }
         }
         
+        private static T FindParent<T>(DependencyObject child) where T : DependencyObject
+        {
+            DependencyObject parentObject = VisualTreeHelper.GetParent(child);
+            
+            if (parentObject == null)
+                return null;
+                
+            if (parentObject is T parent)
+                return parent;
+                
+            return FindParent<T>(parentObject);
+        }
+
         // Navigate to the previous token or input box
         public void NavigateToPreviousToken(TokenControl currentToken)
         {
@@ -637,6 +658,23 @@ namespace RuleEditor.ViewModels.Version2
                     e.Handled = true;
                 }
             }
+        }
+        
+        // Notify subscribers that the expression has changed
+        private void NotifyExpressionChanged()
+        {
+            // Raise the ExpressionChanged event
+            ExpressionChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        // Called by TokenControl when its text changes
+        public void NotifyTokenChanged(TokenControl token)
+        {
+            // Notify that a token was changed
+            TokenChanged?.Invoke(this, new TokenEventArgs(token));
+            
+            // Notify that the expression has changed
+            NotifyExpressionChanged();
         }
     }
 

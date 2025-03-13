@@ -24,6 +24,8 @@
           Height="*" />
         <RowDefinition
           Height="Auto" />
+        <RowDefinition
+          Height="Auto" />
       </Grid.RowDefinitions>
 
       <Border
@@ -44,8 +46,32 @@
         </ScrollViewer>
       </Border>
 
-      <StackPanel
+      <!-- Expression Panel -->
+      <Border
         Grid.Row="1"
+        Background="WhiteSmoke"
+        BorderBrush="#CCCCCC"
+        BorderThickness="1"
+        Margin="5,0,5,5"
+        Padding="5">
+        <DockPanel>
+          <TextBlock
+            Text="Expression:"
+            FontWeight="SemiBold"
+            VerticalAlignment="Center"
+            Margin="0,0,5,0"
+            DockPanel.Dock="Left" />
+          <TextBox
+            x:Name="expressionTextBox"
+            IsReadOnly="True"
+            BorderThickness="0"
+            Background="Transparent"
+            TextWrapping="Wrap" />
+        </DockPanel>
+      </Border>
+
+      <StackPanel
+        Grid.Row="2"
         Orientation="Horizontal"
         Margin="5">
         <Button

@@ -29,8 +29,18 @@ namespace RuleEditor.ViewModels.Version2
             expressionEditor.TokenRemoved += ExpressionEditor_TokenRemoved;
             expressionEditor.TokenChanged += ExpressionEditor_TokenChanged;
             
+            // Subscribe to text changes directly for updating the expression panel
+            expressionEditor.TextChanged += ExpressionEditor_TextChanged;
+            
+            // Subscribe to expression changes
+            expressionEditor.ExpressionChanged += (s, e) => UpdateExpressionTextBox();
+            
             // Set focus to the expression editor when the control is loaded
-            this.Loaded += (s, e) => expressionEditor.Focus();
+            this.Loaded += (s, e) => 
+            {
+                expressionEditor.Focus();
+                UpdateExpressionTextBox(); // Initialize the expression text box
+            };
             
             // Add click handler to set focus to the expression editor
             this.PreviewMouseDown += (s, e) => 
@@ -82,9 +92,15 @@ namespace RuleEditor.ViewModels.Version2
             _isUpdatingText = true;
             try
             {
+                // Show auto-completion suggestions
+                ShowCompletionWindow();
+                
                 // Get text from tokens
                 string text = GetTextFromTokens();
                 _viewModel.ExpressionCode = text;
+
+                // Update the expression panel
+                UpdateExpressionTextBox();
 
                 // Highlight unknown properties
                 HighlightUnknownProperties();
@@ -149,6 +165,30 @@ namespace RuleEditor.ViewModels.Version2
             // Convert tokens to expression string
             var expression = string.Join(" ", expressionEditor.GetTokens().Select(t => t.Text));
             _viewModel.ExpressionCode = expression;
+        }
+
+        private void UpdateExpressionTextBox()
+        {
+            // Get text from all tokens
+            StringBuilder sb = new StringBuilder();
+            foreach (var token in expressionEditor.GetTokens())
+            {
+                if (sb.Length > 0)
+                    sb.Append(" ");
+                sb.Append(token.Text);
+            }
+            
+            // Add the current input text if it's not empty
+            string currentInput = expressionEditor.GetCurrentText()?.Trim();
+            if (!string.IsNullOrEmpty(currentInput))
+            {
+                if (sb.Length > 0)
+                    sb.Append(" ");
+                sb.Append(currentInput);
+            }
+            
+            // Update the expression text box
+            expressionTextBox.Text = sb.ToString();
         }
 
         private void FormatButton_Click(object sender, RoutedEventArgs e)

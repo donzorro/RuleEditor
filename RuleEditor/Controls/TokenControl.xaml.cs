@@ -34,6 +34,16 @@ namespace RuleEditor.Controls
             {
                 comboBox.KeyDown += TokenComboBox_KeyDown;
                 comboBox.PreviewKeyDown += TokenComboBox_PreviewKeyDown;
+                
+                // We need to wait until the template is applied to get the TextBox
+                comboBox.Loaded += (s, e) =>
+                {
+                    var textBox = comboBox.Template.FindName("PART_EditableTextBox", comboBox) as TextBox;
+                    if (textBox != null)
+                    {
+                        textBox.TextChanged += TextBox_TextChanged;
+                    }
+                };
             }
         }
 
@@ -133,6 +143,17 @@ namespace RuleEditor.Controls
                         e.Handled = true;
                     }
                 }
+            }
+        }
+
+        private void TextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            // Find the parent TokenizerControl
+            var parent = FindParent<RuleEditor.ViewModels.Version2.TokenizerControl>(this);
+            if (parent != null)
+            {
+                // Notify the parent that this token has changed
+                parent.NotifyTokenChanged(this);
             }
         }
         
