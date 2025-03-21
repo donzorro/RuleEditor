@@ -8,6 +8,7 @@
   xmlns:avalonedit="http://icsharpcode.net/sharpdevelop/avalonedit"
   xmlns:viewmodels="clr-namespace:RuleEditor.ViewModels"
   xmlns:v2="clr-namespace:RuleEditor.ViewModels.Version2"
+  xmlns:v3="clr-namespace:RuleEditor.ViewModels.Version3"
   xmlns:converters="clr-namespace:RuleEditor.Converters"
   mc:Ignorable="d"
   Title="Expression Rule Editor"
@@ -20,7 +21,9 @@
       <RowDefinition
         Height="Auto" />
     </Grid.RowDefinitions>
-    <v2:RuleEditorView2 />
+
+    <v3:RuleEditorControl3 />
+
     <Button
       Content="Sample Evaluate"
       Click="Button_Click"
