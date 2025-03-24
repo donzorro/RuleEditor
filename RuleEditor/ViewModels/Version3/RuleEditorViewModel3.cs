@@ -18,6 +18,7 @@ namespace RuleEditor.ViewModels.Version3
         private List<string> _suggestions = new List<string>();
         private bool _isSyntaxValid;
         private List<string> _syntaxErrors = new List<string>();
+        private List<Token> _tokensWithErrors = new List<Token>();
         private string _statusMessage = "Ready";
         private string _testResultMessage = "";
         private int _caretPosition;
@@ -80,6 +81,16 @@ namespace RuleEditor.ViewModels.Version3
                 _syntaxErrors = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(HasSyntaxErrors));
+            }
+        }
+
+        public List<Token> SyntaxErrorObjects
+        {
+            get => _tokensWithErrors;
+            private set
+            {
+                _tokensWithErrors = value;
+                OnPropertyChanged();
             }
         }
 
@@ -189,6 +200,7 @@ namespace RuleEditor.ViewModels.Version3
             else if (_currentToken != tokenAtCaret)
             {
                 CurrentToken = tokenAtCaret;
+                UpdateSuggestions();
             }
         }
 
@@ -203,69 +215,65 @@ namespace RuleEditor.ViewModels.Version3
             }
             else
             {
-                // Generate suggestions based on the current token type
-                switch (CurrentToken.Type)
+                // Generate suggestions based on the possible token types
+                if (CurrentToken.PossibleTypes.Contains(TokenType.Property))
                 {
-                    case TokenType.Property:
-                        newSuggestions = AvailableProperties
-                            .Select(p => p.Name)
-                            .Where(name => name.StartsWith(CurrentToken.Value, StringComparison.OrdinalIgnoreCase))
-                            .ToList();
-                        break;
-
-                    case TokenType.Operator:
-                        // Get the previous token to determine what operators are valid
-                        var prevToken = Tokens
-                            .LastOrDefault(t => t.Position < CurrentToken.Position);
+                    // Suggest properties
+                    newSuggestions.AddRange(AvailableProperties
+                        .Select(p => p.Name)
+                        .Where(name => name.StartsWith(CurrentToken.Value, StringComparison.OrdinalIgnoreCase)));
+                }
+                
+                if (CurrentToken.PossibleTypes.Contains(TokenType.Operator))
+                {
+                    // Get the previous token to determine what operators are valid
+                    var prevToken = Tokens
+                        .LastOrDefault(t => t.Position < CurrentToken.Position);
+                    
+                    if (prevToken != null && prevToken.Type == TokenType.Property)
+                    {
+                        var propInfo = AvailableProperties
+                            .FirstOrDefault(p => p.Name.Equals(prevToken.Value, StringComparison.OrdinalIgnoreCase));
                         
-                        if (prevToken?.Type == TokenType.Property)
+                        if (propInfo != null)
                         {
-                            var propInfo = AvailableProperties
-                                .FirstOrDefault(p => p.Name.Equals(prevToken.Value, StringComparison.OrdinalIgnoreCase));
-                            
-                            if (propInfo != null)
-                            {
-                                newSuggestions = GetValidOperatorsForType(propInfo.Type)
-                                    .Where(op => op.StartsWith(CurrentToken.Value, StringComparison.OrdinalIgnoreCase))
-                                    .ToList();
-                            }
+                            newSuggestions.AddRange(GetValidOperatorsForType(propInfo.Type)
+                                .Where(op => op.StartsWith(CurrentToken.Value, StringComparison.OrdinalIgnoreCase)));
                         }
-                        break;
+                    }
+                }
 
-                    case TokenType.LogicalOperator:
-                        newSuggestions = new List<string> { "AND", "OR", "NOT" }
-                            .Where(op => op.StartsWith(CurrentToken.Value, StringComparison.OrdinalIgnoreCase))
-                            .ToList();
-                        break;
+                if (CurrentToken.PossibleTypes.Contains(TokenType.LogicalOperator))
+                {
+                    // Suggest logical operators
+                    newSuggestions.AddRange(new List<string> { "AND", "OR", "NOT" }
+                        .Where(op => op.StartsWith(CurrentToken.Value, StringComparison.OrdinalIgnoreCase)));
+                }
 
-                    case TokenType.Value:
-                        // Get the previous tokens to determine what values are valid
-                        var operatorToken = Tokens
-                            .LastOrDefault(t => t.Position < CurrentToken.Position && t.Type == TokenType.Operator);
-                        var propertyToken = Tokens
-                            .LastOrDefault(t => t.Position < (operatorToken?.Position ?? 0) && t.Type == TokenType.Property);
+                if (CurrentToken.PossibleTypes.Contains(TokenType.Value))
+                {
+                    // Get the previous tokens to determine what values are valid
+                    var operatorToken = Tokens
+                        .LastOrDefault(t => t.Position < CurrentToken.Position && t.Type == TokenType.Operator);
+                    var propertyToken = Tokens
+                        .LastOrDefault(t => t.Position < (operatorToken?.Position ?? 0) && t.Type == TokenType.Property);
+                    
+                    if (propertyToken != null)
+                    {
+                        var propInfo = AvailableProperties
+                            .FirstOrDefault(p => p.Name.Equals(propertyToken.Value, StringComparison.OrdinalIgnoreCase));
                         
-                        if (propertyToken != null)
+                        if (propInfo != null)
                         {
-                            var propInfo = AvailableProperties
-                                .FirstOrDefault(p => p.Name.Equals(propertyToken.Value, StringComparison.OrdinalIgnoreCase));
-                            
-                            if (propInfo != null)
-                            {
-                                newSuggestions = GetCommonValuesForType(propInfo.Type, CurrentToken.Value)
-                                    .Where(v => v.StartsWith(CurrentToken.Value, StringComparison.OrdinalIgnoreCase))
-                                    .ToList();
-                            }
+                            newSuggestions.AddRange(GetCommonValuesForType(propInfo.Type, CurrentToken.Value)
+                                .Where(v => v.StartsWith(CurrentToken.Value, StringComparison.OrdinalIgnoreCase)));
                         }
-                        break;
+                    }
                 }
             }
             
-            // Only update if suggestions have changed
-            if (!Suggestions.SequenceEqual(newSuggestions))
-            {
-                Suggestions = newSuggestions;
-            }
+            // Always update suggestions to ensure the popup shows the latest suggestions
+            Suggestions = newSuggestions.Distinct().ToList();
         }
 
         private List<string> GetExpectedNextTokenSuggestions()
@@ -382,11 +390,14 @@ namespace RuleEditor.ViewModels.Version3
             {
                 IsSyntaxValid = false;
                 SyntaxErrors = new List<string> { "Expression is empty" };
+                SyntaxErrorObjects = new List<Token>();
                 StatusMessage = "Empty expression";
                 return;
             }
 
             SyntaxErrors = _parser.GetSyntaxErrors(Tokens);
+            // After validation, collect tokens with errors
+            SyntaxErrorObjects = Tokens.Where(t => t.HasError).ToList();
             IsSyntaxValid = SyntaxErrors.Count == 0;
             StatusMessage = IsSyntaxValid ? "Expression is valid" : "Expression has syntax errors";
         }

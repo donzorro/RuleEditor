@@ -102,7 +102,7 @@
               IsOpen="False"
               AllowsTransparency="True"
               PopupAnimation="Fade"
-              StaysOpen="False">
+              StaysOpen="True">
               <Border 
                 Background="White" 
                 BorderBrush="#AAAAAA" 

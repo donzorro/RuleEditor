@@ -21,17 +21,21 @@ namespace RuleEditor.ViewModels.Version3
     {
         public string Value { get; set; }
         public TokenType Type { get; set; }
+        public IEnumerable<TokenType> PossibleTypes { get; set; }
         public int Position { get; set; }
         public int Length { get; set; }
         public bool HasError { get; set; }
         public string ErrorMessage { get; set; }
 
-        public Token(string value, TokenType type, int position)
+       
+        
+        public Token(string value, TokenType type, int position, IEnumerable<TokenType> possibleTypes = null)
         {
             Value = value;
             Type = type;
             Position = position;
             Length = value?.Length ?? 0;
+            PossibleTypes = possibleTypes ?? new [] { type };
         }
 
         public override string ToString() => Value;
@@ -42,6 +46,7 @@ namespace RuleEditor.ViewModels.Version3
         private readonly List<RulePropertyInfo> _availableProperties;
         private static readonly List<string> _comparisonOperators = new List<string> { "==", "!=", ">", "<", ">=", "<=", "CONTAINS", "STARTSWITH", "ENDSWITH" };
         private static readonly List<string> _logicalOperators = new List<string> { "AND", "OR", "NOT" };
+        private TokenType _expectedNextTokenType;
 
         public ExpressionParser(List<RulePropertyInfo> availableProperties)
         {
@@ -133,7 +138,7 @@ namespace RuleEditor.ViewModels.Version3
                     var word = wordMatch.Value;
                     var tokenType = DetermineTokenType(word, tokens);
                     
-                    tokens.Add(new Token(word, tokenType, currentPosition));
+                    tokens.Add(new Token(word, tokenType, currentPosition, new[] {TokenType.Property}));
                     currentPosition += word.Length;
                     continue;
                 }
@@ -169,6 +174,11 @@ namespace RuleEditor.ViewModels.Version3
 
             // Default to unknown
             return TokenType.Unknown;
+        }
+
+        public void SetExpectedNextTokenType(TokenType expectedType)
+        {
+            _expectedNextTokenType = expectedType;
         }
 
         public bool ValidateSyntax(List<Token> tokens)

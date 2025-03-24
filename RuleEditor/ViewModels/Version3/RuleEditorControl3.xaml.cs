@@ -49,29 +49,16 @@ namespace RuleEditor.ViewModels.Version3
         private void DrawErrorUnderlines()
         {
             // Clear any existing adorners
-            var layer = AdornerLayer.GetAdornerLayer(expressionTextBox);
-            if (layer != null)
-            {
-                var adorners = layer.GetAdorners(expressionTextBox);
-                if (adorners != null)
-                {
-                    foreach (var adorner in adorners)
-                    {
-                        if (adorner is SquigglyLineAdorner)
-                        {
-                            layer.Remove(adorner);
-                        }
-                    }
-                }
-            }
+            ClearErrorAdorners();
             
-            // Add new adorners for tokens with errors
-            if (_viewModel.Tokens != null)
+            // Add new adorners for syntax errors
+            var layer = AdornerLayer.GetAdornerLayer(expressionTextBox);
+            if (layer != null && _viewModel.SyntaxErrorObjects != null)
             {
-                foreach (var token in _viewModel.Tokens.Where(t => t.HasError))
+                foreach (var error in _viewModel.SyntaxErrorObjects)
                 {
-                    var adorner = new SquigglyLineAdorner(expressionTextBox, token.Position, token.Length);
-                    layer?.Add(adorner);
+                    var adorner = new SquigglyLineAdorner(expressionTextBox, error.Position, error.Length);
+                    layer.Add(adorner);
                 }
             }
         }
@@ -109,19 +96,29 @@ namespace RuleEditor.ViewModels.Version3
 
         private void UpdateSuggestionsPopup()
         {
+            // Always update the suggestions list before deciding whether to show the popup
+            suggestionsList.ItemsSource = _viewModel.Suggestions;
+            
             if (_viewModel.Suggestions.Count > 0)
             {
+                // Position the popup relative to the caret position
+                suggestionsPopup.HorizontalOffset = CalculatePopupHorizontalOffset();
+                
                 // Show the popup
                 suggestionsPopup.IsOpen = true;
-
+                
                 // Select the first item
                 if (suggestionsList.Items.Count > 0)
                 {
                     suggestionsList.SelectedIndex = 0;
                 }
+                
+                // Make sure the popup stays open
+                suggestionsPopup.StaysOpen = true;
             }
             else
             {
+                // Close the popup if there are no suggestions
                 suggestionsPopup.IsOpen = false;
             }
         }
@@ -259,6 +256,7 @@ namespace RuleEditor.ViewModels.Version3
                 // Set caret position after the inserted suggestion
                 expressionTextBox.CaretIndex = selectionStart + suggestion.Length;
             }
+
         }
 
         private void ClearErrorAdorners()
