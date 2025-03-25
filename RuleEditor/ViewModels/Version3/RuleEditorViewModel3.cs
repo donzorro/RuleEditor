@@ -171,6 +171,7 @@ namespace RuleEditor.ViewModels.Version3
                 new RulePropertyInfo { Name = "IsActive", Type = typeof(bool), Description = "Account status" },
                 new RulePropertyInfo { Name = "Price", Type = typeof(decimal), Description = "Item price" },
                 new RulePropertyInfo { Name = "Email", Type = typeof(string), Description = "Email address" },
+                new RulePropertyInfo { Name = "Emoji", Type = typeof(string), Description = "Emoji address" },
                 new RulePropertyInfo { Name = "LastLoginDate", Type = typeof(DateTime), Description = "Last login timestamp" }
             };
         }
@@ -279,7 +280,7 @@ namespace RuleEditor.ViewModels.Version3
         private List<string> GetExpectedNextTokenSuggestions()
         {
             // If there are no tokens yet or we're at the end, suggest properties or logical operators
-            if (Tokens.Count == 0 || CaretPosition >= ExpressionText.Length)
+            if (Tokens.Count == 0)
             {
                 return AvailableProperties.Select(p => p.Name).ToList();
             }

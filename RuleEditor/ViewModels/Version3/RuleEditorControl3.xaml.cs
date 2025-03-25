@@ -256,6 +256,11 @@ namespace RuleEditor.ViewModels.Version3
                 // Set caret position after the inserted suggestion
                 expressionTextBox.CaretIndex = selectionStart + suggestion.Length;
             }
+            else
+            {
+                expressionTextBox.Text += suggestion;
+                expressionTextBox.CaretIndex = expressionTextBox.Text.Length;
+            }
 
         }
 
