@@ -23,6 +23,17 @@ namespace RuleEditor.ViewModels.Version3
         private string _testResultMessage = "";
         private int _caretPosition;
         private Token _currentToken;
+        
+        // Sample friend data for demonstration purposes
+        private readonly List<(string Id, string FullName)> _sampleFriends = new List<(string Id, string FullName)>
+        {
+            ("user123", "John Smith"),
+            ("user456", "Emma Johnson"),
+            ("user789", "Michael Brown"),
+            ("user321", "Sarah Davis"),
+            ("user654", "David Wilson"),
+            ("user987", "Jennifer Taylor")
+        };
 
         public event PropertyChangedEventHandler PropertyChanged;
 
@@ -164,6 +175,7 @@ namespace RuleEditor.ViewModels.Version3
 
         private void InitializeAvailableProperties()
         {
+
             AvailableProperties = new List<RulePropertyInfo>
             {
                 new RulePropertyInfo { Name = "Name", Type = typeof(string), Description = "Person's full name" },
@@ -172,7 +184,13 @@ namespace RuleEditor.ViewModels.Version3
                 new RulePropertyInfo { Name = "Price", Type = typeof(decimal), Description = "Item price" },
                 new RulePropertyInfo { Name = "Email", Type = typeof(string), Description = "Email address" },
                 new RulePropertyInfo { Name = "Emoji", Type = typeof(string), Description = "Emoji address" },
-                new RulePropertyInfo { Name = "LastLoginDate", Type = typeof(DateTime), Description = "Last login timestamp" }
+                new RulePropertyInfo { Name = "LastLoginDate", Type = typeof(DateTime), Description = "Last login timestamp" },
+                new RulePropertyInfo { 
+                    Name = "Friends", 
+                    Type = typeof(string), 
+                    Description = "Comma-separated list of friend user IDs",
+                    IsFriendsList = true 
+                }
             };
         }
 
@@ -334,8 +352,25 @@ namespace RuleEditor.ViewModels.Version3
                         
                         if (propInfo != null)
                         {
-                            newSuggestions.AddRange(GetCommonValuesForType(propInfo.Type, CurrentToken.Value)
-                                .Where(v => v.StartsWith(CurrentToken.Value, StringComparison.OrdinalIgnoreCase)));
+                            // Special case for Friends property
+                            if (propInfo.IsFriendsList)
+                            {
+                                // Return friend suggestions in "Full Name (user_id)" format
+                                var prefix = CurrentToken.Value;
+                                var friendSuggestions = _sampleFriends
+                                    .Select(f => $"'{f.FullName} ({f.Id})'")
+                                    .Where(s => string.IsNullOrEmpty(prefix) || 
+                                               s.Contains(prefix.TrimStart('\''), StringComparison.OrdinalIgnoreCase))
+                                    .ToList();
+                                    
+                                newSuggestions.AddRange(friendSuggestions);
+                            }
+                            else
+                            {
+                                // Normal property value suggestions
+                                newSuggestions.AddRange(GetCommonValuesForType(propInfo.Type, CurrentToken.Value)
+                                    .Where(v => v.StartsWith(CurrentToken.Value, StringComparison.OrdinalIgnoreCase)));
+                            }
                         }
                     }
                 }
@@ -427,6 +462,43 @@ namespace RuleEditor.ViewModels.Version3
 
         public List<string> GetCommonValuesForType(Type type, string prefix)
         {
+            // Check if we're dealing with a friends list property
+            // First, find the previous property token
+            var prevPropertyToken = Tokens.LastOrDefault(t =>
+                    t.Position < CaretPosition &&
+                    t.Type == TokenType.Property);                 
+                
+            // Check if the previous property is the Friends property
+            var isFriendsProperty = prevPropertyToken != null && 
+                AvailableProperties.Any(p => 
+                    p.IsFriendsList && 
+                    p.Name.Equals(prevPropertyToken.Value, StringComparison.OrdinalIgnoreCase));
+                    
+            if (isFriendsProperty)
+            {
+                // Return friend suggestions in "name (ID)" format
+                var friendSuggestions = _sampleFriends
+                    .Select(f => $"'{f.FullName} ({f.Id})'")
+                    .ToList();
+                
+                // Filter by prefix if provided
+                if (!string.IsNullOrEmpty(prefix))
+                {
+                    // Strip quotes if present
+                    var searchPrefix = prefix;
+                    if ((searchPrefix.StartsWith("'") || searchPrefix.StartsWith("\"")) && searchPrefix.Length > 1)
+                    {
+                        searchPrefix = searchPrefix.Substring(1);
+                    }
+                    
+                    friendSuggestions = friendSuggestions
+                        .Where(s => s.Contains(searchPrefix, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+                }
+                
+                return friendSuggestions;
+            }
+            
             if (type == typeof(bool))
             {
                 return new List<string> { "true", "false" }

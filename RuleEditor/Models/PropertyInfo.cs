@@ -9,6 +9,12 @@ namespace RuleEditor.Models
         public string Description { get; set; }
         public Type Type { get; set; }
 
+        /// <summary>
+        /// Indicates if this property represents a comma-separated list of friends
+        /// that should display special suggestions with user names and IDs
+        /// </summary>
+        public bool IsFriendsList { get; set; }
+
         public bool SupportsOperator(string op)
         {
             return op switch
