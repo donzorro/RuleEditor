@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace RuleEditor.Models
 {
@@ -10,10 +11,11 @@ namespace RuleEditor.Models
         public Type Type { get; set; }
 
         /// <summary>
-        /// Indicates if this property represents a comma-separated list of friends
-        /// that should display special suggestions with user names and IDs
+        /// Collection of allowed values for this property.
+        /// If not null or empty, only these values should be presented as suggestions.
+        /// For example, can be used for Friends list or any other property with restricted values.
         /// </summary>
-        public bool IsFriendsList { get; set; }
+        public IEnumerable<string> AllowedValues { get; set; }
 
         public bool SupportsOperator(string op)
         {

@@ -189,7 +189,7 @@ namespace RuleEditor.ViewModels.Version3
                     Name = "Friends", 
                     Type = typeof(string), 
                     Description = "Comma-separated list of friend user IDs",
-                    IsFriendsList = true 
+                    AllowedValues = _sampleFriends.Select(f => $"'{f.FullName} ({f.Id})'")
                 }
             };
         }
@@ -353,12 +353,11 @@ namespace RuleEditor.ViewModels.Version3
                         if (propInfo != null)
                         {
                             // Special case for Friends property
-                            if (propInfo.IsFriendsList)
+                            if (propInfo.AllowedValues != null)
                             {
                                 // Return friend suggestions in "Full Name (user_id)" format
                                 var prefix = CurrentToken.Value;
-                                var friendSuggestions = _sampleFriends
-                                    .Select(f => $"'{f.FullName} ({f.Id})'")
+                                var friendSuggestions = propInfo.AllowedValues
                                     .Where(s => string.IsNullOrEmpty(prefix) || 
                                                s.Contains(prefix.TrimStart('\''), StringComparison.OrdinalIgnoreCase))
                                     .ToList();
@@ -417,6 +416,13 @@ namespace RuleEditor.ViewModels.Version3
                         var prop = AvailableProperties
                             .FirstOrDefault(p => p.Name.Equals(prevPropToken.Value, StringComparison.OrdinalIgnoreCase));
                         
+                        // Special case for Friends property
+                        if (prop != null && prop.AllowedValues != null)
+                        {
+                            // Just return the full list of formatted friend suggestions
+                            return prop.AllowedValues.ToList();
+                        }
+                        
                         return prop != null 
                             ? GetCommonValuesForType(prop.Type, "") 
                             : new List<string>();
@@ -460,45 +466,31 @@ namespace RuleEditor.ViewModels.Version3
             return operators;
         }
 
-        public List<string> GetCommonValuesForType(Type type, string prefix)
+        private List<string> GetCommonValuesForType(Type type, string prefix = "")
         {
-            // Check if we're dealing with a friends list property
-            // First, find the previous property token
-            var prevPropertyToken = Tokens.LastOrDefault(t =>
-                    t.Position < CaretPosition &&
-                    t.Type == TokenType.Property);                 
-                
-            // Check if the previous property is the Friends property
-            var isFriendsProperty = prevPropertyToken != null && 
-                AvailableProperties.Any(p => 
-                    p.IsFriendsList && 
-                    p.Name.Equals(prevPropertyToken.Value, StringComparison.OrdinalIgnoreCase));
-                    
-            if (isFriendsProperty)
+            // Get the property info by checking the token values
+            if (Tokens.Count >= 2)
             {
-                // Return friend suggestions in "name (ID)" format
-                var friendSuggestions = _sampleFriends
-                    .Select(f => $"'{f.FullName} ({f.Id})'")
-                    .ToList();
+                var lastOperatorToken = Tokens.LastOrDefault(t => t.Type == TokenType.Operator);
+                var propertyToken = Tokens.LastOrDefault(t => 
+                    t.Position < (lastOperatorToken?.Position ?? 0) && 
+                    t.Type == TokenType.Property);
                 
-                // Filter by prefix if provided
-                if (!string.IsNullOrEmpty(prefix))
+                if (propertyToken != null)
                 {
-                    // Strip quotes if present
-                    var searchPrefix = prefix;
-                    if ((searchPrefix.StartsWith("'") || searchPrefix.StartsWith("\"")) && searchPrefix.Length > 1)
-                    {
-                        searchPrefix = searchPrefix.Substring(1);
-                    }
+                    // Check if this property has restricted values
+                    var propInfo = AvailableProperties
+                        .FirstOrDefault(p => p.Name.Equals(propertyToken.Value, StringComparison.OrdinalIgnoreCase));
                     
-                    friendSuggestions = friendSuggestions
-                        .Where(s => s.Contains(searchPrefix, StringComparison.OrdinalIgnoreCase))
-                        .ToList();
+                    if (propInfo != null && propInfo.AllowedValues != null)
+                    {
+                        // Return the allowed values for this property
+                        return propInfo.AllowedValues.ToList();
+                    }
                 }
-                
-                return friendSuggestions;
             }
             
+            // If no specific allowed values, return default values for the type
             if (type == typeof(bool))
             {
                 return new List<string> { "true", "false" }

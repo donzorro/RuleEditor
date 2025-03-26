@@ -14,6 +14,7 @@ namespace RuleEditor.ViewModels.Version3
         LogicalOperator,
         OpenParenthesis,
         CloseParenthesis,
+        RestrictedValue,  // For restricted values like Friend names that must come from a predefined list
         Unknown
     }
 
@@ -26,16 +27,18 @@ namespace RuleEditor.ViewModels.Version3
         public int Length { get; set; }
         public bool HasError { get; set; }
         public string ErrorMessage { get; set; }
+        public IEnumerable<string> PossibleValues { get; set; }
 
        
         
-        public Token(string value, TokenType type, int position, IEnumerable<TokenType> possibleTypes = null)
+        public Token(string value, TokenType type, int position, IEnumerable<TokenType> possibleTypes = null, IEnumerable<string> possibleValues = null)
         {
             Value = value;
             Type = type;
             Position = position;
             Length = value?.Length ?? 0;
             PossibleTypes = possibleTypes ?? new [] { type };
+            PossibleValues = possibleValues;
         }
 
         public override string ToString() => Value;
@@ -87,28 +90,64 @@ namespace RuleEditor.ViewModels.Version3
                 }
 
                 // Check for string literals
-                if (expression[currentPosition] == '\'' || expression[currentPosition] == '"')
+                if (expression[currentPosition] == '\'' || expression[currentPosition] == '\"')
                 {
                     var quoteChar = expression[currentPosition];
                     var startPos = currentPosition;
-                    currentPosition++; // Skip the opening quote
-
-                    // Find the closing quote
+                    currentPosition++; // Skip opening quote
+                    var literalValue = string.Empty;
+                    
+                    // Find closing quote
                     while (currentPosition < expressionLength && expression[currentPosition] != quoteChar)
+                    {
+                        literalValue += expression[currentPosition];
                         currentPosition++;
-
-                    if (currentPosition < expressionLength) // Found closing quote
-                    {
-                        currentPosition++; // Include the closing quote
-                        var value = expression.Substring(startPos, currentPosition - startPos);
-                        tokens.Add(new Token(value, TokenType.Value, startPos));
                     }
-                    else // No closing quote found
+                    
+                    if (currentPosition < expressionLength)
                     {
-                        var value = expression.Substring(startPos);
-                        tokens.Add(new Token(value, TokenType.Unknown, startPos));
+                        currentPosition++; // Skip closing quote
+                        
+                        // Check if this string is for a property with restricted values
+                        var lastPropertyToken = tokens.LastOrDefault(t => t.Type == TokenType.Property);
+                        var lastOperatorToken = tokens.LastOrDefault(t => t.Type == TokenType.Operator);
+                        
+                        // If we have a property followed by an operator before this string value
+                        if (lastPropertyToken != null && lastOperatorToken != null && 
+                            lastPropertyToken.Position < lastOperatorToken.Position)
+                        {
+                            var propertyName = lastPropertyToken.Value;
+                            var propertyInfo = _availableProperties.FirstOrDefault(p => 
+                                p.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase));
+                            
+                            // If the property has restricted values, use RestrictedValue token type
+                            if (propertyInfo?.AllowedValues != null)
+                            {
+                                tokens.Add(new Token(quoteChar + literalValue + quoteChar, 
+                                    TokenType.RestrictedValue, 
+                                    startPos,
+                                    possibleTypes: null,
+                                    possibleValues: propertyInfo.AllowedValues));
+                            }
+                            else
+                            {
+                                tokens.Add(new Token(quoteChar + literalValue + quoteChar, TokenType.Value, startPos));
+                            }
+                        }
+                        else
+                        {
+                            tokens.Add(new Token(quoteChar + literalValue + quoteChar, TokenType.Value, startPos));
+                        }
                     }
-                    continue;
+                    else
+                    {
+                        // Missing closing quote
+                        tokens.Add(new Token(quoteChar + literalValue, TokenType.Value, startPos) 
+                        {
+                            HasError = true,
+                            ErrorMessage = "Missing closing quote"
+                        });
+                    }
                 }
 
                 // Try to match operators
@@ -144,7 +183,8 @@ namespace RuleEditor.ViewModels.Version3
                 }
 
                 // If we get here, we couldn't match anything recognizable
-                tokens.Add(new Token(expression[currentPosition].ToString(), TokenType.Unknown, currentPosition));
+                if(currentPosition < expressionLength)
+                    tokens.Add(new Token(expression[currentPosition].ToString(), TokenType.Unknown, currentPosition));
                 currentPosition++;
             }
 
