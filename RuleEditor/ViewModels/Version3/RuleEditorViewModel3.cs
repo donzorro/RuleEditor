@@ -394,6 +394,15 @@ namespace RuleEditor.ViewModels.Version3
                 return AvailableProperties.Select(p => p.Name).ToList();
             }
 
+            // Special case for numeric values - if we're at the end of a number with no space,
+            // don't show any suggestions (user might still be typing the number)
+            if (lastToken.Type == TokenType.Value && 
+                decimal.TryParse(lastToken.Value, out _) &&
+                CaretPosition == lastToken.Position + lastToken.Length)
+            {
+                return new List<string>(); // Return empty list to indicate no suggestions
+            }
+
             // Suggest based on the last token type
             switch (lastToken.Type)
             {

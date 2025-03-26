@@ -6,7 +6,7 @@
   xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
   xmlns:local="clr-namespace:RuleEditor"
   xmlns:avalonedit="http://icsharpcode.net/sharpdevelop/avalonedit"
-  xmlns:viewmodels="clr-namespace:RuleEditor.ViewModels"
+  xmlns:v1="clr-namespace:RuleEditor.ViewModels"
   xmlns:v2="clr-namespace:RuleEditor.ViewModels.Version2"
   xmlns:v3="clr-namespace:RuleEditor.ViewModels.Version3"
   xmlns:converters="clr-namespace:RuleEditor.Converters"
@@ -22,8 +22,9 @@
         Height="Auto" />
     </Grid.RowDefinitions>
 
+    <!--<v1:RuleEditorView />-->
+    <!--<v2:RuleEditorView2 />-->
     <v3:RuleEditorControl3 />
-
     <Button
       Content="Sample Evaluate"
       Click="Button_Click"

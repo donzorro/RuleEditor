@@ -177,7 +177,25 @@ namespace RuleEditor.ViewModels.Version3
                     var word = wordMatch.Value;
                     var tokenType = DetermineTokenType(word, tokens);
                     
-                    tokens.Add(new Token(word, tokenType, currentPosition, new[] {TokenType.Property}));
+                    // Create token with appropriate possible types based on what it could be
+                    var possibleTypes = new List<TokenType> { tokenType };
+                    
+                    // If it looks like a property but follows an operator, it could also be a value
+                    if (tokenType == TokenType.Property && 
+                        tokens.LastOrDefault()?.Type == TokenType.Operator)
+                    {
+                        possibleTypes.Add(TokenType.Value);
+                    }
+                    // If it's a value but at the start of an expression, it could also be a property
+                    else if (tokenType == TokenType.Value && 
+                             (tokens.Count == 0 || 
+                              tokens.LastOrDefault()?.Type == TokenType.LogicalOperator ||
+                              tokens.LastOrDefault()?.Type == TokenType.OpenParenthesis))
+                    {
+                        possibleTypes.Add(TokenType.Property);
+                    }
+                    
+                    tokens.Add(new Token(word, tokenType, currentPosition, possibleTypes));
                     currentPosition += word.Length;
                     continue;
                 }
@@ -203,7 +221,7 @@ namespace RuleEditor.ViewModels.Version3
                 return TokenType.Value;
 
             // Check if it's a property name
-            if (_availableProperties.Any(p => p.Name.Equals(word, StringComparison.OrdinalIgnoreCase)))
+            if (_availableProperties.Any(p => p.Name.StartsWith(word, StringComparison.OrdinalIgnoreCase)))
                 return TokenType.Property;
 
             // If the previous token was an operator, this is likely a value
