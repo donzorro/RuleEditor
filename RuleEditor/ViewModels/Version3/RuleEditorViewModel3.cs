@@ -202,8 +202,8 @@ namespace RuleEditor.ViewModels.Version3
         }
 
         public void UpdateCurrentToken()
-        {
             // Find the token at the current caret position
+        {
             var tokenAtCaret = Tokens.FirstOrDefault(t => 
                 t.Position <= CaretPosition && 
                 t.Position + t.Length >= CaretPosition);

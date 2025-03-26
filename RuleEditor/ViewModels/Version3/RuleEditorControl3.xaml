@@ -78,13 +78,25 @@
                       <Setter Property="ToolTip">
                         <Setter.Value>
                           <ToolTip>
-                            <ItemsControl ItemsSource="{Binding SyntaxErrors}">
-                              <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                  <TextBlock Text="{Binding}" Margin="0,2" />
-                                </DataTemplate>
-                              </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                            <TextBox 
+                              IsReadOnly="True" 
+                              BorderThickness="0"
+                              Background="Transparent"
+                              TextWrapping="Wrap"
+                              MinWidth="300"
+                              MaxWidth="500"
+                              MaxHeight="300"
+                              VerticalScrollBarVisibility="Auto">
+                              <TextBox.Text>
+                                <MultiBinding StringFormat="{}{0}">
+                                  <Binding Path="SyntaxErrors" Mode="OneWay"> 
+                                    <Binding.Converter>
+                                      <local:ErrorListToStringConverter />
+                                    </Binding.Converter>
+                                  </Binding>
+                                </MultiBinding>
+                              </TextBox.Text>
+                            </TextBox>
                           </ToolTip>
                         </Setter.Value>
                       </Setter>
@@ -143,17 +155,25 @@
                 FontWeight="Bold" 
                 Foreground="#CC0000" 
                 Margin="0,0,0,5" />
-              <ItemsControl ItemsSource="{Binding SyntaxErrors}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate>
-                    <TextBlock 
-                      Text="{Binding}" 
-                      Foreground="#CC0000" 
-                      TextWrapping="Wrap" 
-                      Margin="10,0,0,2" />
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
+              <TextBox 
+                IsReadOnly="True" 
+                BorderThickness="0"
+                Background="Transparent"
+                TextWrapping="Wrap"
+                MinWidth="300"
+                MaxWidth="500"
+                MaxHeight="300"
+                VerticalScrollBarVisibility="Auto">
+                <TextBox.Text>
+                  <MultiBinding StringFormat="{}{0}">
+                    <Binding Path="SyntaxErrors" Mode="OneWay">
+                      <Binding.Converter>
+                        <local:ErrorListToStringConverter />
+                      </Binding.Converter>
+                    </Binding>
+                  </MultiBinding>
+                </TextBox.Text>
+              </TextBox>
             </StackPanel>
           </Border>
         </Grid>

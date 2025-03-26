@@ -359,7 +359,7 @@ namespace RuleEditor.ViewModels.Version3
                             current.HasError = true;
                             current.ErrorMessage = "Operator must be followed by a value";
                         }
-                        else if (next.Type != TokenType.Value)
+                        else if (next.Type != TokenType.Value && next.Type != TokenType.RestrictedValue)
                         {
                             errors.Add($"Operator '{current.Value}' must be followed by a value, not '{next.Value}'");
                             current.HasError = true;
@@ -432,6 +432,47 @@ namespace RuleEditor.ViewModels.Version3
             }
 
             return errors;
+        }
+
+        private bool IsValidRestrictedValue(string inputValue, IEnumerable<string> allowedValues)
+        {
+            if (allowedValues == null || !allowedValues.Any())
+                return true; // No restrictions
+                
+            string valueToCheck = inputValue;
+            
+            // Remove quotes if present
+            if ((valueToCheck.StartsWith("'") && valueToCheck.EndsWith("'")) || 
+                (valueToCheck.StartsWith("\"") && valueToCheck.EndsWith("\"")))
+            {
+                valueToCheck = valueToCheck.Substring(1, valueToCheck.Length - 2);
+            }
+            
+            // First check for exact match
+            if (allowedValues.Any(v => v.Equals(inputValue, StringComparison.OrdinalIgnoreCase)))
+                return true;
+                
+            // Then check for matches where we extract just the name part
+            return allowedValues.Any(v => 
+            {
+                string cleanValue = v;
+                
+                // Remove quotes if present
+                if ((cleanValue.StartsWith("'") && cleanValue.EndsWith("'")) || 
+                    (cleanValue.StartsWith("\"") && cleanValue.EndsWith("\"")))
+                {
+                    cleanValue = cleanValue.Substring(1, cleanValue.Length - 2);
+                }
+                
+                // Extract just the name part if it's in Name (ID) format
+                int parenIndex = cleanValue.IndexOf(" (");
+                if (parenIndex > 0)
+                {
+                    cleanValue = cleanValue.Substring(0, parenIndex);
+                }
+                
+                return cleanValue.StartsWith(valueToCheck, StringComparison.OrdinalIgnoreCase);
+            });
         }
     }
 }
