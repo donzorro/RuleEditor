@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using System.Linq;
 using System.Windows.Media;
+using System.ComponentModel;
 
 namespace RuleEditor.ViewModels.Version3
 {
@@ -29,12 +30,24 @@ namespace RuleEditor.ViewModels.Version3
             };
             _validationTimer.Tick += ValidationTimer_Tick;
 
+            // Listen for changes to SyntaxErrorObjects property
+            _viewModel.PropertyChanged += ViewModel_PropertyChanged;
+
             // Set initial focus
             this.Loaded += (s, e) => expressionTextBox.Focus();
             
             // Hook up text changed event
             expressionTextBox.TextChanged += ExpressionTextBox_TextChanged;
             expressionTextBox.MouseMove += ExpressionTextBox_MouseMove;
+        }
+
+        private void ViewModel_PropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            // When SyntaxErrorObjects changes, update the error adorners
+            if (e.PropertyName == nameof(RuleEditorViewModel3.SyntaxErrorObjects))
+            {
+                DrawErrorUnderlines();
+            }
         }
 
         private void ValidationTimer_Tick(object sender, EventArgs e)
@@ -246,22 +259,45 @@ namespace RuleEditor.ViewModels.Version3
                 int selectionStart = currentToken.Position;
                 int selectionLength = currentToken.Length;
 
-                // Update the text
+                // Update the text - add a space after the suggestion
                 string newText = expressionTextBox.Text.Substring(0, selectionStart) +
-                                suggestion +
+                                suggestion + " " +
                                 expressionTextBox.Text.Substring(selectionStart + selectionLength);
 
                 expressionTextBox.Text = newText;
 
-                // Set caret position after the inserted suggestion
-                expressionTextBox.CaretIndex = selectionStart + suggestion.Length;
+                // Set caret position after the inserted suggestion and the space
+                expressionTextBox.CaretIndex = selectionStart + suggestion.Length + 1;
             }
             else
             {
-                expressionTextBox.Text += suggestion;
-                expressionTextBox.CaretIndex = expressionTextBox.Text.Length;
+                // If there's no current token, insert at caret position
+                int caretIndex = expressionTextBox.CaretIndex;
+                
+                // Update the text - add a space after the suggestion
+                string newText = expressionTextBox.Text.Substring(0, caretIndex) +
+                                suggestion + " " +
+                                expressionTextBox.Text.Substring(caretIndex);
+                
+                expressionTextBox.Text = newText;
+                
+                // Move caret after the suggestion and the space
+                expressionTextBox.CaretIndex = caretIndex + suggestion.Length + 1;
             }
 
+            // Update the view model with the new text and caret position
+            _viewModel.ExpressionText = expressionTextBox.Text;
+            _viewModel.CaretPosition = expressionTextBox.CaretIndex;
+            
+            // Force token update in the view model to ensure suggestions for the next token are generated
+            _viewModel.UpdateTokens();
+            _viewModel.UpdateCurrentToken();
+
+            // Set focus back to the text box
+            expressionTextBox.Focus();
+            
+            // Finally, update the suggestions popup for the new position
+            UpdateSuggestionsPopup();
         }
 
         private void ClearErrorAdorners()
@@ -360,7 +396,7 @@ namespace RuleEditor.ViewModels.Version3
             var startX = rect.X;
             var y = rect.Bottom + 1;
             
-            var points = new List<Point>();
+            var points = new System.Collections.Generic.List<Point>();
             
             // Generate points for a wavy line
             for (double x = 0; x <= width; x += wavySize)

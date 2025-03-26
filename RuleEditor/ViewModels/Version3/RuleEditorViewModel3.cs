@@ -176,14 +176,14 @@ namespace RuleEditor.ViewModels.Version3
             };
         }
 
-        private void UpdateTokens()
+        public void UpdateTokens()
         {
             Tokens = _parser.Tokenize(ExpressionText);
             UpdateCurrentToken();
             ValidateExpressionSyntax();
         }
 
-        private void UpdateCurrentToken()
+        public void UpdateCurrentToken()
         {
             // Find the token at the current caret position
             var tokenAtCaret = Tokens.FirstOrDefault(t => 
@@ -220,11 +220,79 @@ namespace RuleEditor.ViewModels.Version3
                 if (CurrentToken.PossibleTypes.Contains(TokenType.Property))
                 {
                     // Suggest properties
-                    newSuggestions.AddRange(AvailableProperties
+                    var matchingProperties = AvailableProperties
                         .Select(p => p.Name)
-                        .Where(name => name.StartsWith(CurrentToken.Value, StringComparison.OrdinalIgnoreCase)));
+                        .Where(name => name.StartsWith(CurrentToken.Value, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+
+                    // Add all matching properties to suggestions
+                    newSuggestions.AddRange(matchingProperties);
+
+                    // If there are no matching properties, mark the token as an error
+                    // but still show all available properties in the dropdown
+                    if (matchingProperties.Count == 0 && !string.IsNullOrEmpty(CurrentToken.Value))
+                    {
+                        // Mark the current token as an error
+                        CurrentToken.HasError = true;
+                        CurrentToken.ErrorMessage = $"No property found that starts with '{CurrentToken.Value}'";
+                        
+                        // Find the corresponding token in the Tokens collection and mark it as an error too
+                        var tokenInCollection = Tokens.FirstOrDefault(t => 
+                            t.Position == CurrentToken.Position && 
+                            t.Length == CurrentToken.Length);
+                            
+                        if (tokenInCollection != null && tokenInCollection != CurrentToken)
+                        {
+                            tokenInCollection.HasError = true;
+                            tokenInCollection.ErrorMessage = CurrentToken.ErrorMessage;
+                        }
+                        
+                        // Show all available properties in the dropdown
+                        newSuggestions.AddRange(AvailableProperties.Select(p => p.Name));
+                        
+                        // Update SyntaxErrorObjects collection with the error token
+                        var updatedErrors = new List<Token>(SyntaxErrorObjects);
+                        if (!updatedErrors.Any(t => t.Position == CurrentToken.Position && t.Length == CurrentToken.Length))
+                        {
+                            updatedErrors.Add(CurrentToken);
+                            SyntaxErrorObjects = updatedErrors;
+                            OnPropertyChanged(nameof(SyntaxErrorObjects));
+                        }
+                    }
+                    else
+                    {
+                        // Clear any error from the token if we now have matches
+                        if (CurrentToken.HasError)
+                        {
+                            CurrentToken.HasError = false;
+                            CurrentToken.ErrorMessage = null;
+                            
+                            // Also clear the error from the token in the collection
+                            var tokenInCollection = Tokens.FirstOrDefault(t => 
+                                t.Position == CurrentToken.Position && 
+                                t.Length == CurrentToken.Length);
+                                
+                            if (tokenInCollection != null && tokenInCollection != CurrentToken)
+                            {
+                                tokenInCollection.HasError = false;
+                                tokenInCollection.ErrorMessage = null;
+                            }
+                            
+                            // Remove this token from SyntaxErrorObjects if it exists
+                            var tokenPositionAndLength = (CurrentToken.Position, CurrentToken.Length);
+                            var updatedErrors = SyntaxErrorObjects
+                                .Where(t => t.Position != CurrentToken.Position || t.Length != CurrentToken.Length)
+                                .ToList();
+                                
+                            if (updatedErrors.Count != SyntaxErrorObjects.Count)
+                            {
+                                SyntaxErrorObjects = updatedErrors;
+                                OnPropertyChanged(nameof(SyntaxErrorObjects));
+                            }
+                        }
+                    }
                 }
-                
+
                 if (CurrentToken.PossibleTypes.Contains(TokenType.Operator))
                 {
                     // Get the previous token to determine what operators are valid
