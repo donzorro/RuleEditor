@@ -255,47 +255,77 @@ namespace RuleEditor.ViewModels.Version3
 
             if (currentToken != null)
             {
-                // Replace the current token with the suggestion
                 int selectionStart = currentToken.Position;
                 int selectionLength = currentToken.Length;
 
-                // Update the text - add a space after the suggestion
-                string newText = expressionTextBox.Text.Substring(0, selectionStart) +
-                                suggestion + " " +
-                                expressionTextBox.Text.Substring(selectionStart + selectionLength);
+                // --- FIX: If caret is at the end of the token and suggestion is a logical operator, insert after ---
+                if (expressionTextBox.CaretIndex == selectionStart + selectionLength &&
+                    (suggestion == "AND" || suggestion == "OR" || suggestion == "NOT"))
+                {
+                    int caret = expressionTextBox.CaretIndex;
+                    string text = expressionTextBox.Text;
 
-                expressionTextBox.Text = newText;
+                    // Check if there is already a space before the caret, insert one if not
+                    bool needsSpace = (caret == 0 || text[caret - 1] != ' ');
 
-                // Set caret position after the inserted suggestion and the space
-                expressionTextBox.CaretIndex = selectionStart + suggestion.Length + 1;
+                    string insertText = (needsSpace ? " " : "") + suggestion + " ";
+                    expressionTextBox.Text = text.Insert(caret, insertText);
+                    expressionTextBox.CaretIndex = caret + insertText.Length;
+                }
+                else if (suggestion == "'" || suggestion == "\"")
+                {
+                    // Insert a pair of quotes, caret inside
+                    string quotes = suggestion + suggestion;
+                    expressionTextBox.Text = expressionTextBox.Text.Substring(0, selectionStart) +
+                                             quotes +
+                                             expressionTextBox.Text.Substring(selectionStart + selectionLength);
+                    expressionTextBox.CaretIndex = selectionStart + 1;
+                }
+                else
+                {
+                    // Default: replace the current token
+                    string newText = expressionTextBox.Text.Substring(0, selectionStart) +
+                                     suggestion + " " +
+                                     expressionTextBox.Text.Substring(selectionStart + selectionLength);
+                    expressionTextBox.Text = newText;
+                    expressionTextBox.CaretIndex = selectionStart + suggestion.Length + 1;
+                }
             }
             else
             {
-                // If there's no current token, insert at caret position
                 int caretIndex = expressionTextBox.CaretIndex;
-                
-                // Update the text - add a space after the suggestion
-                string newText = expressionTextBox.Text.Substring(0, caretIndex) +
-                                suggestion + " " +
-                                expressionTextBox.Text.Substring(caretIndex);
-                
-                expressionTextBox.Text = newText;
-                
-                // Move caret after the suggestion and the space
-                expressionTextBox.CaretIndex = caretIndex + suggestion.Length + 1;
+
+                if (suggestion == "'" || suggestion == "\"")
+                {
+                    // Insert a pair of quotes, caret inside
+                    string quotes = suggestion + suggestion;
+                    expressionTextBox.Text = expressionTextBox.Text.Substring(0, caretIndex) +
+                                             quotes +
+                                             expressionTextBox.Text.Substring(caretIndex);
+                    expressionTextBox.CaretIndex = caretIndex + 1;
+                }
+                else
+                {
+                    // Default: add suggestion and a space
+                    string newText = expressionTextBox.Text.Substring(0, caretIndex) +
+                                     suggestion + " " +
+                                     expressionTextBox.Text.Substring(caretIndex);
+                    expressionTextBox.Text = newText;
+                    expressionTextBox.CaretIndex = caretIndex + suggestion.Length + 1;
+                }
             }
 
             // Update the view model with the new text and caret position
             _viewModel.ExpressionText = expressionTextBox.Text;
             _viewModel.CaretPosition = expressionTextBox.CaretIndex;
-            
+
             // Force token update in the view model to ensure suggestions for the next token are generated
             _viewModel.UpdateTokens();
             _viewModel.UpdateCurrentToken();
 
             // Set focus back to the text box
             expressionTextBox.Focus();
-            
+
             // Finally, update the suggestions popup for the new position
             UpdateSuggestionsPopup();
         }

@@ -202,23 +202,26 @@ namespace RuleEditor.ViewModels.Version3
         }
 
         public void UpdateCurrentToken()
-            // Find the token at the current caret position
         {
-            var tokenAtCaret = Tokens.FirstOrDefault(t => 
-                t.Position <= CaretPosition && 
+            // Find the token at the current caret position
+            var tokenAtCaret = Tokens.FirstOrDefault(t =>
+                t.Position <= CaretPosition &&
                 t.Position + t.Length >= CaretPosition);
-            
-            // If no token is found at the caret position, we're in between tokens or at the end
+
+            // Always update suggestions, even if token didn't change
             if (tokenAtCaret == null)
             {
-                // Clear the current token but still update suggestions
                 _currentToken = null;
                 OnPropertyChanged(nameof(CurrentToken));
                 UpdateSuggestions();
             }
-            else if (_currentToken != tokenAtCaret)
+            else
             {
-                CurrentToken = tokenAtCaret;
+                if (_currentToken != tokenAtCaret)
+                {
+                    CurrentToken = tokenAtCaret;
+                }
+                // Always update suggestions when caret moves within the token
                 UpdateSuggestions();
             }
         }
@@ -226,7 +229,7 @@ namespace RuleEditor.ViewModels.Version3
         private void UpdateSuggestions()
         {
             List<string> newSuggestions = new List<string>();
-            
+
             if (CurrentToken == null)
             {
                 // If we're not on a token, determine what kind of token would be expected next
@@ -234,107 +237,65 @@ namespace RuleEditor.ViewModels.Version3
             }
             else
             {
-                // Generate suggestions based on the possible token types
+                // --- FIX: If the previous token is a value or close parenthesis, only suggest logical operators ---
+                var prevToken = Tokens.LastOrDefault(t => t.Position + t.Length <= CaretPosition);
+                if (prevToken != null &&
+                    (prevToken.Type == TokenType.Value || prevToken.Type == TokenType.CloseParenthesis) &&
+                    CaretPosition >= prevToken.Position + prevToken.Length)
+                {
+                    Suggestions = new List<string> { "AND", "OR" };
+                    return;
+                }
+
+                // Calculate the prefix up to the caret within the current token
+                int prefixLength = Math.Max(0, CaretPosition - CurrentToken.Position);
+                string tokenPrefix = "";
+                if (CaretPosition >= CurrentToken.Position && CaretPosition <= CurrentToken.Position + CurrentToken.Length)
+                {
+                    tokenPrefix = ExpressionText.Substring(CurrentToken.Position, prefixLength);
+                }
+                else
+                {
+                    // fallback: use the whole token value
+                    tokenPrefix = CurrentToken.Value ?? "";
+                }
+
                 if (CurrentToken.PossibleTypes.Contains(TokenType.Property))
                 {
-                    // Suggest properties
+                    // Suggest properties matching the prefix
                     var matchingProperties = AvailableProperties
                         .Select(p => p.Name)
-                        .Where(name => name.StartsWith(CurrentToken.Value, StringComparison.OrdinalIgnoreCase))
+                        .Where(name => name.StartsWith(tokenPrefix, StringComparison.OrdinalIgnoreCase))
                         .ToList();
-
-                    // Add all matching properties to suggestions
                     newSuggestions.AddRange(matchingProperties);
-
-                    // If there are no matching properties, mark the token as an error
-                    // but still show all available properties in the dropdown
-                    if (matchingProperties.Count == 0 && !string.IsNullOrEmpty(CurrentToken.Value))
-                    {
-                        // Mark the current token as an error
-                        CurrentToken.HasError = true;
-                        CurrentToken.ErrorMessage = $"No property found that starts with '{CurrentToken.Value}'";
-                        
-                        // Find the corresponding token in the Tokens collection and mark it as an error too
-                        var tokenInCollection = Tokens.FirstOrDefault(t => 
-                            t.Position == CurrentToken.Position && 
-                            t.Length == CurrentToken.Length);
-                            
-                        if (tokenInCollection != null && tokenInCollection != CurrentToken)
-                        {
-                            tokenInCollection.HasError = true;
-                            tokenInCollection.ErrorMessage = CurrentToken.ErrorMessage;
-                        }
-                        
-                        // Show all available properties in the dropdown
-                        newSuggestions.AddRange(AvailableProperties.Select(p => p.Name));
-                        
-                        // Update SyntaxErrorObjects collection with the error token
-                        var updatedErrors = new List<Token>(SyntaxErrorObjects);
-                        if (!updatedErrors.Any(t => t.Position == CurrentToken.Position && t.Length == CurrentToken.Length))
-                        {
-                            updatedErrors.Add(CurrentToken);
-                            SyntaxErrorObjects = updatedErrors;
-                            OnPropertyChanged(nameof(SyntaxErrorObjects));
-                        }
-                    }
-                    else
-                    {
-                        // Clear any error from the token if we now have matches
-                        if (CurrentToken.HasError)
-                        {
-                            CurrentToken.HasError = false;
-                            CurrentToken.ErrorMessage = null;
-                            
-                            // Also clear the error from the token in the collection
-                            var tokenInCollection = Tokens.FirstOrDefault(t => 
-                                t.Position == CurrentToken.Position && 
-                                t.Length == CurrentToken.Length);
-                                
-                            if (tokenInCollection != null && tokenInCollection != CurrentToken)
-                            {
-                                tokenInCollection.HasError = false;
-                                tokenInCollection.ErrorMessage = null;
-                            }
-                            
-                            // Remove this token from SyntaxErrorObjects if it exists
-                            var tokenPositionAndLength = (CurrentToken.Position, CurrentToken.Length);
-                            var updatedErrors = SyntaxErrorObjects
-                                .Where(t => t.Position != CurrentToken.Position || t.Length != CurrentToken.Length)
-                                .ToList();
-                                
-                            if (updatedErrors.Count != SyntaxErrorObjects.Count)
-                            {
-                                SyntaxErrorObjects = updatedErrors;
-                                OnPropertyChanged(nameof(SyntaxErrorObjects));
-                            }
-                        }
-                    }
                 }
 
                 if (CurrentToken.PossibleTypes.Contains(TokenType.Operator))
                 {
-                    // Get the previous token to determine what operators are valid
-                    var prevToken = Tokens
-                        .LastOrDefault(t => t.Position < CurrentToken.Position);
-                    
-                    if (prevToken != null && prevToken.Type == TokenType.Property)
+                    // Get the previous property to determine valid operators
+                    var prevPropertyToken = Tokens
+                        .LastOrDefault(t => t.Position < CurrentToken.Position && t.Type == TokenType.Property);
+
+                    Type propertyType = typeof(string); // fallback
+                    if (prevPropertyToken != null)
                     {
                         var propInfo = AvailableProperties
-                            .FirstOrDefault(p => p.Name.Equals(prevToken.Value, StringComparison.OrdinalIgnoreCase));
-                        
+                            .FirstOrDefault(p => p.Name.Equals(prevPropertyToken.Value, StringComparison.OrdinalIgnoreCase));
                         if (propInfo != null)
-                        {
-                            newSuggestions.AddRange(GetValidOperatorsForType(propInfo.Type)
-                                .Where(op => op.StartsWith(CurrentToken.Value, StringComparison.OrdinalIgnoreCase)));
-                        }
+                            propertyType = propInfo.Type;
                     }
+
+                    var matchingOperators = GetValidOperatorsForType(propertyType)
+                        .Where(op => op.StartsWith(tokenPrefix, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+                    newSuggestions.AddRange(matchingOperators);
                 }
 
                 if (CurrentToken.PossibleTypes.Contains(TokenType.LogicalOperator))
                 {
-                    // Suggest logical operators
+                    // Suggest logical operators matching the prefix
                     newSuggestions.AddRange(new List<string> { "AND", "OR", "NOT" }
-                        .Where(op => op.StartsWith(CurrentToken.Value, StringComparison.OrdinalIgnoreCase)));
+                        .Where(op => op.StartsWith(tokenPrefix, StringComparison.OrdinalIgnoreCase)));
                 }
 
                 if (CurrentToken.PossibleTypes.Contains(TokenType.Value))
@@ -344,37 +305,37 @@ namespace RuleEditor.ViewModels.Version3
                         .LastOrDefault(t => t.Position < CurrentToken.Position && t.Type == TokenType.Operator);
                     var propertyToken = Tokens
                         .LastOrDefault(t => t.Position < (operatorToken?.Position ?? 0) && t.Type == TokenType.Property);
-                    
+
                     if (propertyToken != null)
                     {
                         var propInfo = AvailableProperties
                             .FirstOrDefault(p => p.Name.Equals(propertyToken.Value, StringComparison.OrdinalIgnoreCase));
-                        
+
                         if (propInfo != null)
                         {
                             // Special case for Friends property
                             if (propInfo.AllowedValues != null)
                             {
                                 // Return friend suggestions in "Full Name (user_id)" format
-                                var prefix = CurrentToken.Value;
+                                var prefix = tokenPrefix.TrimStart('\'', '"');
                                 var friendSuggestions = propInfo.AllowedValues
-                                    .Where(s => string.IsNullOrEmpty(prefix) || 
-                                               s.Contains(prefix.TrimStart('\''), StringComparison.OrdinalIgnoreCase))
+                                    .Where(s => string.IsNullOrEmpty(prefix) ||
+                                               s.Contains(prefix, StringComparison.OrdinalIgnoreCase))
                                     .ToList();
-                                    
+
                                 newSuggestions.AddRange(friendSuggestions);
                             }
                             else
                             {
                                 // Normal property value suggestions
-                                newSuggestions.AddRange(GetCommonValuesForType(propInfo.Type, CurrentToken.Value)
-                                    .Where(v => v.StartsWith(CurrentToken.Value, StringComparison.OrdinalIgnoreCase)));
+                                newSuggestions.AddRange(GetCommonValuesForType(propInfo.Type, tokenPrefix)
+                                    .Where(v => v.StartsWith(tokenPrefix, StringComparison.OrdinalIgnoreCase)));
                             }
                         }
                     }
                 }
             }
-            
+
             // Always update suggestions to ensure the popup shows the latest suggestions
             Suggestions = newSuggestions.Distinct().ToList();
         }
@@ -396,11 +357,18 @@ namespace RuleEditor.ViewModels.Version3
 
             // Special case for numeric values - if we're at the end of a number with no space,
             // don't show any suggestions (user might still be typing the number)
-            if (lastToken.Type == TokenType.Value && 
+            if (lastToken.Type == TokenType.Value &&
                 decimal.TryParse(lastToken.Value, out _) &&
                 CaretPosition == lastToken.Position + lastToken.Length)
             {
                 return new List<string>(); // Return empty list to indicate no suggestions
+            }
+
+            // --- FIX: After a value or close parenthesis, only suggest logical operators ---
+            if ((lastToken.Type == TokenType.Value || lastToken.Type == TokenType.CloseParenthesis)
+                && CaretPosition >= lastToken.Position + lastToken.Length)
+            {
+                return new List<string> { "AND", "OR" };
             }
 
             // Suggest based on the last token type
@@ -410,37 +378,37 @@ namespace RuleEditor.ViewModels.Version3
                     // After a property, suggest operators
                     var propInfo = AvailableProperties
                         .FirstOrDefault(p => p.Name.Equals(lastToken.Value, StringComparison.OrdinalIgnoreCase));
-                    
-                    return propInfo != null 
-                        ? GetValidOperatorsForType(propInfo.Type) 
+
+                    return propInfo != null
+                        ? GetValidOperatorsForType(propInfo.Type)
                         : new List<string>();
 
                 case TokenType.Operator:
                     // After an operator, suggest values
                     var prevPropToken = Tokens
                         .LastOrDefault(t => t.Position < lastToken.Position && t.Type == TokenType.Property);
-                    
+
                     if (prevPropToken != null)
                     {
                         var prop = AvailableProperties
                             .FirstOrDefault(p => p.Name.Equals(prevPropToken.Value, StringComparison.OrdinalIgnoreCase));
-                        
+
                         // Special case for Friends property
                         if (prop != null && prop.AllowedValues != null)
                         {
                             // Just return the full list of formatted friend suggestions
                             return prop.AllowedValues.ToList();
                         }
-                        
-                        return prop != null 
-                            ? GetCommonValuesForType(prop.Type, "") 
+
+                        return prop != null
+                            ? GetCommonValuesForType(prop.Type, "")
                             : new List<string>();
                     }
                     return new List<string>();
 
                 case TokenType.Value:
                 case TokenType.CloseParenthesis:
-                    // After a value or closing parenthesis, suggest logical operators
+                    // Already handled above, but keep for completeness
                     return new List<string> { "AND", "OR" };
 
                 case TokenType.LogicalOperator:

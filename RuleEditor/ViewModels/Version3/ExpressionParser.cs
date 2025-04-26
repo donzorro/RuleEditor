@@ -213,30 +213,43 @@ namespace RuleEditor.ViewModels.Version3
             return tokens;
         }
 
-        private TokenType DetermineTokenType(string word, List<Token> existingTokens)
+      private TokenType DetermineTokenType(string word, List<Token> existingTokens)
+{
+    // If the previous token was a value or close parenthesis, only logical operators are valid
+    if (existingTokens.Count > 0)
+    {
+        var prev = existingTokens.Last();
+        if (prev.Type == TokenType.Value || prev.Type == TokenType.CloseParenthesis)
         {
-            // Check if it's a boolean literal
-            if (word.Equals("true", StringComparison.OrdinalIgnoreCase) || 
-                word.Equals("false", StringComparison.OrdinalIgnoreCase))
-                return TokenType.Value;
-
-            // Check if it's a numeric literal
-            if (decimal.TryParse(word, out _))
-                return TokenType.Value;
-
-            // Check if it's a property name
-            if (_availableProperties.Any(p => p.Name.StartsWith(word, StringComparison.OrdinalIgnoreCase)))
-                return TokenType.Property;
-
-            // If the previous token was an operator, this is likely a value
-            if (existingTokens.Count > 0 && 
-                (existingTokens.Last().Type == TokenType.Operator || 
-                 existingTokens.Last().Type == TokenType.LogicalOperator))
-                return TokenType.Value;
-
-            // Default to unknown
-            return TokenType.Unknown;
+            // Only allow logical operators
+            if (new[] { "AND", "OR", "NOT" }.Any(op => op.StartsWith(word, StringComparison.OrdinalIgnoreCase)))
+                return TokenType.LogicalOperator;
+            return TokenType.Unknown; // Prevent property or value tokens here
         }
+    }
+
+    // Check if it's a boolean literal
+    if (word.Equals("true", StringComparison.OrdinalIgnoreCase) || 
+        word.Equals("false", StringComparison.OrdinalIgnoreCase))
+        return TokenType.Value;
+
+    // Check if it's a numeric literal
+    if (decimal.TryParse(word, out _))
+        return TokenType.Value;
+
+    // Check if it's a property name
+    if (_availableProperties.Any(p => p.Name.StartsWith(word, StringComparison.OrdinalIgnoreCase)))
+        return TokenType.Property;
+
+    // If the previous token was an operator, this is likely a value
+    if (existingTokens.Count > 0 && 
+        (existingTokens.Last().Type == TokenType.Operator || 
+         existingTokens.Last().Type == TokenType.LogicalOperator))
+        return TokenType.Value;
+
+    // Default to unknown
+    return TokenType.Unknown;
+}
 
         public void SetExpectedNextTokenType(TokenType expectedType)
         {
