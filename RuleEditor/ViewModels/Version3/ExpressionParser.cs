@@ -108,6 +108,10 @@ namespace RuleEditor.ViewModels.Version3
                     {
                         currentPosition++; // Skip closing quote
                         
+                        // Skip any whitespace after the string literal
+                        while (currentPosition < expressionLength && char.IsWhiteSpace(expression[currentPosition]))
+                            currentPosition++;
+                        
                         // Check if this string is for a property with restricted values
                         var lastPropertyToken = tokens.LastOrDefault(t => t.Type == TokenType.Property);
                         var lastOperatorToken = tokens.LastOrDefault(t => t.Type == TokenType.Operator);

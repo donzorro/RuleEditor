@@ -144,6 +144,14 @@ namespace RuleEditor.Controls
                     }
                 }
             }
+            else
+            {
+
+                var comboBox = sender as ComboBox;
+                comboBox.IsDropDownOpen= true;
+
+            }
+
         }
 
         private void TextBox_TextChanged(object sender, TextChangedEventArgs e)

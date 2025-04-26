@@ -107,71 +107,56 @@ namespace RuleEditor.ViewModels.Version2
         public TokenizerControl()
         {
             InitializeComponent();
+            tokens = new List<TokenControl>();
+            currentState = RuleInputState.Property;                              
             
-            // Initialize the ComboBox with suggestions based on current state
-            UpdateComboBoxSuggestions();
-        }
-
-        private void UpdateComboBoxSuggestions()
-        {
-            // Clear existing items
-            inputBox.Items.Clear();
-            
-            // Always allow typing, but we'll validate the input differently based on state
-            inputBox.IsEditable = true;
-            
-            // Add suggestions based on current state
-            switch (currentState)
+            // Initialize the input TokenControl
+            var inputViewModel = new TokenViewModel
             {
-                case RuleInputState.Property:
-                    foreach (var property in validProperties)
+                Text = string.Empty,
+                Type = ConvertStateToTokenType(currentState),
+                Suggestions = new List<string>() // Will be updated later
+            };
+            
+            inputTokenControl.DataContext = inputViewModel;
+            
+            // Subscribe to events from the input TokenControl
+            inputTokenControl.KeyDown += InputTokenControl_KeyDown; // Direct KeyDown on the control
+            
+            if (inputTokenControl.FindName("tokenComboBox") is ComboBox comboBox)
+            {
+                // Track selection changes and key events
+                comboBox.SelectionChanged += InputTokenControl_SelectionChanged;
+                comboBox.PreviewKeyDown += InputTokenControl_PreviewKeyDown;
+                comboBox.LostFocus += InputTokenControl_LostFocus;
+                
+                // We need to wait until the template is applied to get the TextBox for text changes
+                comboBox.Loaded += (s, e) =>
+                {
+                    var textBox = comboBox.Template.FindName("PART_EditableTextBox", comboBox) as TextBox;
+                    if (textBox != null)
                     {
-                        inputBox.Items.Add(property);
+                        textBox.TextChanged += InputTextBox_TextChanged;
+                        textBox.PreviewKeyDown += InputBox_KeyDown;
                     }
-                    // Allow logical operators if we have at least one complete rule
-                    if (HasCompleteRule())
-                    {
-                        foreach (var op in logicalOperators)
-                        {
-                            inputBox.Items.Add(op);
-                        }
-                    }
-                    break;
-                    
-                case RuleInputState.Operation:
-                    foreach (var operation in validOperations)
-                    {
-                        inputBox.Items.Add(operation);
-                    }
-                    break;
-                    
-                case RuleInputState.Value:
-                    // For values, we don't restrict input, so no suggestions needed
-                    // But we could add some common values as suggestions
-                    inputBox.Items.Add("true");
-                    inputBox.Items.Add("false");
-                    inputBox.Items.Add("0");
-                    inputBox.Items.Add("100");
-                    break;
+                };
             }
-        }
-        
-        // Check if we have at least one complete rule (property-operation-value)
-        private bool HasCompleteRule()
-        {
-            return tokens.Count >= 3 && 
-                   tokens.Count % 3 == 0; // Complete rules should have tokens in multiples of 3
+            
+            // Update suggestions for the initial state
+            UpdateInputTokenSuggestions();
         }
 
         private void InputBox_KeyDown(object sender, KeyEventArgs e)
         {
+            var inputBox = sender as TextBox;
+
             if (e.Key == Key.Enter)
             {
                 if (!string.IsNullOrEmpty(GetInputText().Trim()))
                 {
                     // Create token from current input
                     CreateTokenFromInput();
-                    
+
                     // Focus the input box again to prepare for next token
                     inputBox.Focus();
                 }
@@ -180,7 +165,7 @@ namespace RuleEditor.ViewModels.Version2
                     // If input is empty and we have tokens, focus the first token
                     tokens[0].Focus();
                 }
-                
+
                 e.Handled = true;
             }
             else if (e.Key == Key.Back && string.IsNullOrEmpty(GetInputText()) && tokens.Count > 0)
@@ -194,7 +179,7 @@ namespace RuleEditor.ViewModels.Version2
             {
                 // Get the TextBox inside the ComboBox
                 var textBox = inputBox.Template.FindName("PART_EditableTextBox", inputBox) as TextBox;
-                
+
                 // If at the beginning of the text and we have tokens, navigate to the last token
                 if (textBox != null && textBox.CaretIndex == 0 && tokens.Count > 0)
                 {
@@ -206,7 +191,7 @@ namespace RuleEditor.ViewModels.Version2
             {
                 // Get the TextBox inside the ComboBox
                 var textBox = inputBox.Template.FindName("PART_EditableTextBox", inputBox) as TextBox;
-                
+
                 // If at the end of the text and we have tokens, navigate to the first token
                 if (textBox != null && textBox.CaretIndex == textBox.Text.Length && tokens.Count > 0)
                 {
@@ -216,24 +201,80 @@ namespace RuleEditor.ViewModels.Version2
             }
         }
 
-        private void InputBox_TextChanged(object sender, TextChangedEventArgs e)
+        private void InputTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             // Forward the TextChanged event
             TextChanged?.Invoke(this, e);
             
-            var text = GetInputText();
-            if (text.EndsWith(" ") || text.EndsWith("\n"))
+            if (sender is TextBox textBox)
             {
-                CreateTokenFromInput();
+                var text = textBox.Text;
+                if (text.EndsWith(" ") || text.EndsWith("\n"))
+                {
+                    CreateTokenFromInput();
+                }
             }
         }
 
-        private string GetInputText()
+        private void UpdateInputTokenSuggestions()
         {
-            // Get text from the editable ComboBox
-            return inputBox.Text;
-        }
 
+            if (inputTokenControl.DataContext is TokenViewModel viewModel)
+            {
+                viewModel.Suggestions = GetSuggestionsForType(viewModel.Text);
+            }
+        }
+        
+        private void InputTokenControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (sender is ComboBox comboBox && comboBox.SelectedItem != null)
+            {
+                comboBox.Text = comboBox.SelectedItem.ToString();
+                CreateTokenFromInput();
+                
+                // Prevent focus from moving to the next control
+                comboBox.Focus();
+            }
+        }
+        
+        private void InputTokenControl_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            // Similar logic to the original InputBox_PreviewKeyDown
+            if (e.Key == Key.Left)
+            {
+                // Get the TextBox inside the ComboBox
+                if (sender is ComboBox comboBox && 
+                    comboBox.Template.FindName("PART_EditableTextBox", comboBox) is TextBox textBox)
+                {
+                    // If at the beginning of the text and we have tokens, navigate to the last token
+                    if (textBox.CaretIndex == 0 && tokens.Count > 0)
+                    {
+                        tokens[tokens.Count - 1].Focus();
+                        e.Handled = true;
+                    }
+                }
+            }
+            else if (e.Key == Key.Right)
+            {
+                // Get the TextBox inside the ComboBox
+                if (sender is ComboBox comboBox && 
+                    comboBox.Template.FindName("PART_EditableTextBox", comboBox) is TextBox textBox)
+                {
+                    // If at the end of the text and we have tokens, navigate to the first token
+                    if (textBox.CaretIndex == textBox.Text.Length && tokens.Count > 0)
+                    {
+                        tokens[0].Focus();
+                        e.Handled = true;
+                    }
+                }
+            }
+        }
+        
+        private void InputTokenControl_LostFocus(object sender, RoutedEventArgs e)
+        {
+            // Implement any necessary lost focus behavior
+        }
+        
         private void CreateTokenFromInput()
         {
             var text = GetInputText().Trim();
@@ -243,7 +284,10 @@ namespace RuleEditor.ViewModels.Version2
             if (!ValidateInput(text))
             {
                 // If invalid, clear the input and don't create a token
-                inputBox.Text = string.Empty;
+                if (inputTokenControl.DataContext is TokenViewModel vm)
+                {
+                    vm.Text = string.Empty;
+                }
                 return;
             }
 
@@ -261,14 +305,17 @@ namespace RuleEditor.ViewModels.Version2
             tokens.Add(token);
             tokenPanel.Children.Insert(tokenPanel.Children.Count - 1, token);
             
-            // Clear the input box
-            inputBox.Text = string.Empty;
+            // Clear the input control
+            if (inputTokenControl.DataContext is TokenViewModel viewModel)
+            {
+                viewModel.Text = string.Empty;
+            }
             
             // Advance to the next state
             AdvanceState(text);
             
             // Update suggestions for the new state
-            UpdateComboBoxSuggestions();
+            UpdateInputTokenSuggestions();
             
             // Notify that a token was added
             TokenAdded?.Invoke(this, new TokenEventArgs(token));
@@ -276,53 +323,11 @@ namespace RuleEditor.ViewModels.Version2
             NotifyExpressionChanged();
         }
         
-        private bool ValidateInput(string text)
+        // Check if we have at least one complete rule (property-operation-value)
+        private bool HasCompleteRule()
         {
-            switch (currentState)
-            {
-                case RuleInputState.Property:
-                    // Must be a valid property or logical operator
-                    return validProperties.Contains(text) || 
-                           (HasCompleteRule() && logicalOperators.Contains(text));
-                    
-                case RuleInputState.Operation:
-                    // Must be a valid operation
-                    return validOperations.Contains(text);
-                    
-                case RuleInputState.Value:
-                    // Values can be anything
-                    return true;
-                    
-                default:
-                    return false;
-            }
-        }
-        
-        private void AdvanceState(string text)
-        {
-            // If we added a logical operator, stay in Property state
-            if (logicalOperators.Contains(text))
-            {
-                currentState = RuleInputState.Property;
-                return;
-            }
-            
-            // Otherwise advance to the next state
-            switch (currentState)
-            {
-                case RuleInputState.Property:
-                    currentState = RuleInputState.Operation;
-                    break;
-                    
-                case RuleInputState.Operation:
-                    currentState = RuleInputState.Value;
-                    break;
-                    
-                case RuleInputState.Value:
-                    // After a value, we go back to property for the next rule
-                    currentState = RuleInputState.Property;
-                    break;
-            }
+            return tokens.Count >= 3 && 
+                   tokens.Count % 3 == 0; // Complete rules should have tokens in multiples of 3
         }
 
         private void Token_Removed(object sender, TokenRemovedEventArgs e)
@@ -337,7 +342,7 @@ namespace RuleEditor.ViewModels.Version2
             RecalculateState();
             
             // Update suggestions
-            UpdateComboBoxSuggestions();
+            UpdateInputTokenSuggestions();
             
             // Notify that a token was removed
             TokenRemoved?.Invoke(this, new TokenEventArgs(token));
@@ -395,10 +400,25 @@ namespace RuleEditor.ViewModels.Version2
             else
             {
                 // For values, return some common values
-                return new List<string> { "true", "false", "0", "100" };
+                switch (currentState)
+                {
+                    case RuleInputState.Property:
+                        return validProperties;
+                        break;
+
+                    case RuleInputState.Operation:
+                        return validOperations.Concat(logicalOperators).ToList();
+                        break;
+
+                    case RuleInputState.Value:
+                        return new List<string> { "true", "false", "0", "100" };
+                        break;
+                }
             }
+            return new List<string>();
         }
-        
+
+
         private bool IsProperty(string text)
         {
             return validProperties.Contains(text);
@@ -426,7 +446,7 @@ namespace RuleEditor.ViewModels.Version2
         { 
             get 
             {
-                var textBox = inputBox.Template.FindName("PART_EditableTextBox", inputBox) as TextBox;
+                var textBox = inputTokenControl.Template.FindName("PART_EditableTextBox", inputTokenControl) as TextBox;
                 return textBox?.CaretIndex ?? 0;
             } 
         }
@@ -434,7 +454,7 @@ namespace RuleEditor.ViewModels.Version2
         // Get text before the caret
         public string GetTextBeforeCaret()
         {
-            var textBox = inputBox.Template.FindName("PART_EditableTextBox", inputBox) as TextBox;
+            var textBox = inputTokenControl.Template.FindName("PART_EditableTextBox", inputTokenControl) as TextBox;
             if (textBox == null || textBox.CaretIndex < 0) return string.Empty;
             
             // Get text before caret in the inputBox
@@ -444,7 +464,7 @@ namespace RuleEditor.ViewModels.Version2
         // Get the current text
         public string GetCurrentText()
         {
-            return inputBox.Text;
+            return GetInputText();
         }
 
         // Set the expression by creating tokens from a string
@@ -493,7 +513,7 @@ namespace RuleEditor.ViewModels.Version2
             }
             
             // Update suggestions for the current state
-            UpdateComboBoxSuggestions();
+            UpdateInputTokenSuggestions();
             
             NotifyExpressionChanged();
         }
@@ -501,10 +521,10 @@ namespace RuleEditor.ViewModels.Version2
         private void TokenPanel_MouseDown(object sender, MouseButtonEventArgs e)
         {
             // Set focus to the input box when the panel is clicked
-            inputBox.Focus();
+            inputTokenControl.Focus();
             
             // Position the caret at the end of the text
-            var textBox = inputBox.Template.FindName("PART_EditableTextBox", inputBox) as TextBox;
+            var textBox = inputTokenControl.Template.FindName("PART_EditableTextBox", inputTokenControl) as TextBox;
             if (textBox != null)
             {
                 textBox.CaretIndex = textBox.Text.Length;
@@ -514,41 +534,108 @@ namespace RuleEditor.ViewModels.Version2
         // Override the Focus method to set focus to the input box
         public new bool Focus()
         {
-            return inputBox.Focus();
+            return inputTokenControl.Focus();
         }
         
-        private void InputBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private void InputTokenControl_KeyDown(object sender, KeyEventArgs e)
         {
-            // When an item is selected from the dropdown, create a token immediately
-            if (inputBox.SelectedItem != null)
+            if (e.Key == Key.Enter)
             {
-                // Set the text to the selected item
-                inputBox.Text = inputBox.SelectedItem.ToString();
-                
-                // Create a token from the selected item
-                CreateTokenFromInput();
-                
-                // Clear the selection
-                inputBox.SelectedItem = null;
-            }
-        }
-        
-        private void InputBox_LostFocus(object sender, RoutedEventArgs e)
-        {
-            // For Property and Operation states, enforce selection from the list
-            if (currentState != RuleInputState.Value)
-            {
-                var text = GetInputText().Trim();
-                if (!string.IsNullOrEmpty(text) && !ValidateInput(text))
+                if (!string.IsNullOrEmpty(GetInputText().Trim()))
                 {
-                    // Clear invalid input
-                    inputBox.Text = string.Empty;
+                    // Create token from current input
+                    CreateTokenFromInput();
+                    
+                    // Focus the input box again to prepare for next token
+                    inputTokenControl.Focus();
+                }
+                else if (tokens.Count > 0)
+                {
+                    // If input is empty and we have tokens, focus the first token
+                    tokens[0].Focus();
+                }
+                
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Back && string.IsNullOrEmpty(GetInputText()) && tokens.Count > 0)
+            {
+                // If backspace is pressed on empty input and we have tokens, remove the last token
+                var lastToken = tokens[tokens.Count - 1];
+                Token_Removed(lastToken, new TokenRemovedEventArgs(lastToken));
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Left)
+            {
+                // Get the TextBox inside the ComboBox
+                var textBox = inputTokenControl.Template.FindName("PART_EditableTextBox", inputTokenControl) as TextBox;
+                
+                // If at the beginning of the text and we have tokens, navigate to the last token
+                if (textBox != null && textBox.CaretIndex == 0 && tokens.Count > 0)
+                {
+                    tokens[tokens.Count - 1].Focus();
+                    e.Handled = true;
                 }
             }
-            else if (!string.IsNullOrEmpty(GetInputText().Trim()))
+            else if (e.Key == Key.Right)
             {
-                // For Value state, create a token when focus is lost if there's text
-                CreateTokenFromInput();
+                // Get the TextBox inside the ComboBox
+                var textBox = inputTokenControl.Template.FindName("PART_EditableTextBox", inputTokenControl) as TextBox;
+                
+                // If at the end of the text and we have tokens, navigate to the first token
+                if (textBox != null && textBox.CaretIndex == textBox.Text.Length && tokens.Count > 0)
+                {
+                    tokens[0].Focus();
+                    e.Handled = true;
+                }
+            }
+        }
+
+        private bool ValidateInput(string text)
+        {
+            switch (currentState)
+            {
+                case RuleInputState.Property:
+                    // Must be a valid property or logical operator
+                    return validProperties.Contains(text) || 
+                           (HasCompleteRule() && logicalOperators.Contains(text));
+                    
+                case RuleInputState.Operation:
+                    // Must be a valid operation
+                    return validOperations.Contains(text);
+                    
+                case RuleInputState.Value:
+                    // Values can be anything
+                    return true;
+                    
+                default:
+                    return false;
+            }
+        }
+        
+        private void AdvanceState(string text)
+        {
+            // If we added a logical operator, stay in Property state
+            if (logicalOperators.Contains(text))
+            {
+                currentState = RuleInputState.Property;
+                return;
+            }
+            
+            // Otherwise advance to the next state
+            switch (currentState)
+            {
+                case RuleInputState.Property:
+                    currentState = RuleInputState.Operation;
+                    break;
+                    
+                case RuleInputState.Operation:
+                    currentState = RuleInputState.Value;
+                    break;
+                    
+                case RuleInputState.Value:
+                    // After a value, we go back to property for the next rule
+                    currentState = RuleInputState.Property;
+                    break;
             }
         }
 
@@ -574,10 +661,10 @@ namespace RuleEditor.ViewModels.Version2
             else
             {
                 // Focus the input box if we're at the last token
-                inputBox.Focus();
+                inputTokenControl.Focus();
                 
                 // Position caret at the beginning of the text in the input box
-                var textBox = inputBox.Template.FindName("PART_EditableTextBox", inputBox) as TextBox;
+                var textBox = inputTokenControl.Template.FindName("PART_EditableTextBox", inputTokenControl) as TextBox;
                 if (textBox != null)
                 {
                     textBox.CaretIndex = 0;
@@ -620,10 +707,10 @@ namespace RuleEditor.ViewModels.Version2
             else if (currentIndex == 0)
             {
                 // If we're at the first token, focus the input box
-                inputBox.Focus();
+                inputTokenControl.Focus();
                 
                 // Position caret at the end of the text in the input box
-                var textBox = inputBox.Template.FindName("PART_EditableTextBox", inputBox) as TextBox;
+                var textBox = inputTokenControl.Template.FindName("PART_EditableTextBox", inputTokenControl) as TextBox;
                 if (textBox != null)
                 {
                     textBox.CaretIndex = textBox.Text.Length;
@@ -632,33 +719,7 @@ namespace RuleEditor.ViewModels.Version2
         }       
         
         // Handle PreviewKeyDown for the input box to ensure arrow key navigation works properly
-        private void InputBox_PreviewKeyDown(object sender, KeyEventArgs e)
-        {
-            if (e.Key == Key.Left)
-            {
-                // Get the TextBox inside the ComboBox
-                var textBox = inputBox.Template.FindName("PART_EditableTextBox", inputBox) as TextBox;
-                
-                // If at the beginning of the text and we have tokens, navigate to the last token
-                if (textBox != null && textBox.CaretIndex == 0 && tokens.Count > 0)
-                {
-                    tokens[tokens.Count - 1].Focus();
-                    e.Handled = true;
-                }
-            }
-            else if (e.Key == Key.Right)
-            {
-                // Get the TextBox inside the ComboBox
-                var textBox = inputBox.Template.FindName("PART_EditableTextBox", inputBox) as TextBox;
-                
-                // If at the end of the text and we have tokens, navigate to the first token
-                if (textBox != null && textBox.CaretIndex == textBox.Text.Length && tokens.Count > 0)
-                {
-                    tokens[0].Focus();
-                    e.Handled = true;
-                }
-            }
-        }
+   
         
         // Notify subscribers that the expression has changed
         private void NotifyExpressionChanged()
@@ -675,6 +736,32 @@ namespace RuleEditor.ViewModels.Version2
             
             // Notify that the expression has changed
             NotifyExpressionChanged();
+        }
+
+        // Helper method to convert RuleInputState to TokenType
+        private TokenType ConvertStateToTokenType(RuleInputState state)
+        {
+            switch (state)
+            {
+                case RuleInputState.Property:
+                    return TokenType.Property;
+                case RuleInputState.Operation:
+                    return TokenType.Operator;
+                case RuleInputState.Value:
+                    return TokenType.Value;
+                default:
+                    return TokenType.Property;
+            }
+        }
+
+        private string GetInputText()
+        {
+            // Get text from the input TokenControl's ComboBox
+            if (inputTokenControl.DataContext is TokenViewModel viewModel)
+            {
+                return viewModel.Text;
+            }
+            return string.Empty;
         }
     }
 
