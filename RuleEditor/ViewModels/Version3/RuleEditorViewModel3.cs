@@ -270,7 +270,7 @@ namespace RuleEditor.ViewModels.Version3
                     newSuggestions.AddRange(matchingProperties);
                 }
 
-                if (CurrentToken.PossibleTypes.Contains(TokenType.Operator))
+              if (CurrentToken.PossibleTypes.Contains(TokenType.Operator))
                 {
                     // Get the previous property to determine valid operators
                     var prevPropertyToken = Tokens
@@ -285,9 +285,23 @@ namespace RuleEditor.ViewModels.Version3
                             propertyType = propInfo.Type;
                     }
 
-                    var matchingOperators = GetValidOperatorsForType(propertyType)
-                        .Where(op => op.StartsWith(tokenPrefix, StringComparison.OrdinalIgnoreCase))
-                        .ToList();
+                    var allOperators = GetValidOperatorsForType(propertyType);
+
+                    List<string> matchingOperators;
+                    if (tokenPrefix == "=")
+                    {
+                        // Special case: show all operators that start with '='
+                        matchingOperators = allOperators
+                            .Where(op => op.StartsWith("="))
+                            .ToList();
+                    }
+                    else
+                    {
+                        matchingOperators = allOperators
+                            .Where(op => op.StartsWith(tokenPrefix, StringComparison.OrdinalIgnoreCase))
+                            .ToList();
+                    }
+
                     newSuggestions.AddRange(matchingOperators);
                 }
 

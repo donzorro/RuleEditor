@@ -29,15 +29,15 @@ namespace RuleEditor.ViewModels.Version3
         public string ErrorMessage { get; set; }
         public IEnumerable<string> PossibleValues { get; set; }
 
-       
-        
+
+
         public Token(string value, TokenType type, int position, IEnumerable<TokenType> possibleTypes = null, IEnumerable<string> possibleValues = null)
         {
             Value = value;
             Type = type;
             Position = position;
             Length = value?.Length ?? 0;
-            PossibleTypes = possibleTypes ?? new [] { type };
+            PossibleTypes = possibleTypes ?? new[] { type };
             PossibleValues = possibleValues;
         }
 
@@ -96,39 +96,39 @@ namespace RuleEditor.ViewModels.Version3
                     var startPos = currentPosition;
                     currentPosition++; // Skip opening quote
                     var literalValue = string.Empty;
-                    
+
                     // Find closing quote
                     while (currentPosition < expressionLength && expression[currentPosition] != quoteChar)
                     {
                         literalValue += expression[currentPosition];
                         currentPosition++;
                     }
-                    
+
                     if (currentPosition < expressionLength)
                     {
                         currentPosition++; // Skip closing quote
-                        
+
                         // Skip any whitespace after the string literal
                         while (currentPosition < expressionLength && char.IsWhiteSpace(expression[currentPosition]))
                             currentPosition++;
-                        
+
                         // Check if this string is for a property with restricted values
                         var lastPropertyToken = tokens.LastOrDefault(t => t.Type == TokenType.Property);
                         var lastOperatorToken = tokens.LastOrDefault(t => t.Type == TokenType.Operator);
-                        
+
                         // If we have a property followed by an operator before this string value
-                        if (lastPropertyToken != null && lastOperatorToken != null && 
+                        if (lastPropertyToken != null && lastOperatorToken != null &&
                             lastPropertyToken.Position < lastOperatorToken.Position)
                         {
                             var propertyName = lastPropertyToken.Value;
-                            var propertyInfo = _availableProperties.FirstOrDefault(p => 
+                            var propertyInfo = _availableProperties.FirstOrDefault(p =>
                                 p.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase));
-                            
+
                             // If the property has restricted values, use RestrictedValue token type
                             if (propertyInfo?.AllowedValues != null)
                             {
-                                tokens.Add(new Token(quoteChar + literalValue + quoteChar, 
-                                    TokenType.RestrictedValue, 
+                                tokens.Add(new Token(quoteChar + literalValue + quoteChar,
+                                    TokenType.RestrictedValue,
                                     startPos,
                                     possibleTypes: null,
                                     possibleValues: propertyInfo.AllowedValues));
@@ -146,7 +146,7 @@ namespace RuleEditor.ViewModels.Version3
                     else
                     {
                         // Missing closing quote
-                        tokens.Add(new Token(quoteChar + literalValue, TokenType.Value, startPos) 
+                        tokens.Add(new Token(quoteChar + literalValue, TokenType.Value, startPos)
                         {
                             HasError = true,
                             ErrorMessage = "Missing closing quote"
@@ -159,16 +159,16 @@ namespace RuleEditor.ViewModels.Version3
                 var operatorMatch = _comparisonOperators
                     .Concat(_logicalOperators)
                     .OrderByDescending(op => op.Length) // Try longer operators first
-                    .FirstOrDefault(op => 
-                        remainingText.StartsWith(op, StringComparison.OrdinalIgnoreCase) && 
+                    .FirstOrDefault(op =>
+                        remainingText.StartsWith(op, StringComparison.OrdinalIgnoreCase) &&
                         (remainingText.Length == op.Length || !char.IsLetterOrDigit(remainingText[op.Length])));
 
                 if (operatorMatch != null)
                 {
-                    var tokenType = _logicalOperators.Contains(operatorMatch, StringComparer.OrdinalIgnoreCase) 
-                        ? TokenType.LogicalOperator 
+                    var tokenType = _logicalOperators.Contains(operatorMatch, StringComparer.OrdinalIgnoreCase)
+                        ? TokenType.LogicalOperator
                         : TokenType.Operator;
-                    
+
                     tokens.Add(new Token(operatorMatch, tokenType, currentPosition));
                     currentPosition += operatorMatch.Length;
                     continue;
@@ -180,32 +180,32 @@ namespace RuleEditor.ViewModels.Version3
                 {
                     var word = wordMatch.Value;
                     var tokenType = DetermineTokenType(word, tokens);
-                    
+
                     // Create token with appropriate possible types based on what it could be
                     var possibleTypes = new List<TokenType> { tokenType };
-                    
+
                     // If it looks like a property but follows an operator, it could also be a value
-                    if (tokenType == TokenType.Property && 
+                    if (tokenType == TokenType.Property &&
                         tokens.LastOrDefault()?.Type == TokenType.Operator)
                     {
                         possibleTypes.Add(TokenType.Value);
                     }
                     // If it's a value but at the start of an expression, it could also be a property
-                    else if (tokenType == TokenType.Value && 
-                             (tokens.Count == 0 || 
+                    else if (tokenType == TokenType.Value &&
+                             (tokens.Count == 0 ||
                               tokens.LastOrDefault()?.Type == TokenType.LogicalOperator ||
                               tokens.LastOrDefault()?.Type == TokenType.OpenParenthesis))
                     {
                         possibleTypes.Add(TokenType.Property);
                     }
-                    
+
                     tokens.Add(new Token(word, tokenType, currentPosition, possibleTypes));
                     currentPosition += word.Length;
                     continue;
                 }
 
                 // If we get here, we couldn't match anything recognizable
-                if(currentPosition < expressionLength)
+                if (currentPosition < expressionLength)
                     tokens.Add(new Token(expression[currentPosition].ToString(), TokenType.Unknown, currentPosition));
                 currentPosition++;
             }
@@ -213,43 +213,51 @@ namespace RuleEditor.ViewModels.Version3
             return tokens;
         }
 
-      private TokenType DetermineTokenType(string word, List<Token> existingTokens)
-{
-    // If the previous token was a value or close parenthesis, only logical operators are valid
-    if (existingTokens.Count > 0)
-    {
-        var prev = existingTokens.Last();
-        if (prev.Type == TokenType.Value || prev.Type == TokenType.CloseParenthesis)
+        private TokenType DetermineTokenType(string word, List<Token> existingTokens)
         {
-            // Only allow logical operators
-            if (new[] { "AND", "OR", "NOT" }.Any(op => op.StartsWith(word, StringComparison.OrdinalIgnoreCase)))
-                return TokenType.LogicalOperator;
-            return TokenType.Unknown; // Prevent property or value tokens here
+            // If the previous token was a value or close parenthesis, only logical operators are valid
+            if (existingTokens.Count > 0)
+            {
+                var prev = existingTokens.Last();
+                if (prev.Type == TokenType.Value || prev.Type == TokenType.CloseParenthesis)
+                {
+                    // Only allow logical operators
+                    if (new[] { "AND", "OR", "NOT" }.Any(op => op.StartsWith(word, StringComparison.OrdinalIgnoreCase)))
+                        return TokenType.LogicalOperator;
+                    return TokenType.Unknown; // Prevent property or value tokens here
+                }
+            }
+
+            // Check if it's a boolean literal
+            if (word.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+                word.Equals("false", StringComparison.OrdinalIgnoreCase))
+                return TokenType.Value;
+
+            // Check if it's a numeric literal
+            if (decimal.TryParse(word, out _))
+                return TokenType.Value;
+
+            // Check if it's a property name
+            if (_availableProperties.Any(p => p.Name.StartsWith(word, StringComparison.OrdinalIgnoreCase)))
+                return TokenType.Property;
+
+            // If the previous token was an operator, this is likely a value
+            if (existingTokens.Count > 0 &&
+                (existingTokens.Last().Type == TokenType.Operator ||
+                 existingTokens.Last().Type == TokenType.LogicalOperator))
+                return TokenType.Value;
+
+            // Check if it's a full comparison operator
+            if (_comparisonOperators.Contains(word, StringComparer.OrdinalIgnoreCase))
+                return TokenType.Operator;
+
+            // NEW: Check if it's a prefix of any comparison operator
+            if (_comparisonOperators.Any(op => op.StartsWith(word, StringComparison.OrdinalIgnoreCase)))
+                return TokenType.Operator;
+
+            // Default to unknown
+            return TokenType.Unknown;
         }
-    }
-
-    // Check if it's a boolean literal
-    if (word.Equals("true", StringComparison.OrdinalIgnoreCase) || 
-        word.Equals("false", StringComparison.OrdinalIgnoreCase))
-        return TokenType.Value;
-
-    // Check if it's a numeric literal
-    if (decimal.TryParse(word, out _))
-        return TokenType.Value;
-
-    // Check if it's a property name
-    if (_availableProperties.Any(p => p.Name.StartsWith(word, StringComparison.OrdinalIgnoreCase)))
-        return TokenType.Property;
-
-    // If the previous token was an operator, this is likely a value
-    if (existingTokens.Count > 0 && 
-        (existingTokens.Last().Type == TokenType.Operator || 
-         existingTokens.Last().Type == TokenType.LogicalOperator))
-        return TokenType.Value;
-
-    // Default to unknown
-    return TokenType.Unknown;
-}
 
         public void SetExpectedNextTokenType(TokenType expectedType)
         {
@@ -327,7 +335,7 @@ namespace RuleEditor.ViewModels.Version3
         public List<string> GetSyntaxErrors(List<Token> tokens)
         {
             var errors = new List<string>();
-            
+
             // Reset all error flags first
             foreach (var token in tokens)
             {
@@ -343,11 +351,11 @@ namespace RuleEditor.ViewModels.Version3
             // Check for balanced parentheses
             int openParenCount = tokens.Count(t => t.Type == TokenType.OpenParenthesis);
             int closeParenCount = tokens.Count(t => t.Type == TokenType.CloseParenthesis);
-            
+
             if (openParenCount != closeParenCount)
             {
                 errors.Add($"Unbalanced parentheses: {openParenCount} opening and {closeParenCount} closing");
-                
+
                 // Mark all parentheses as having errors
                 foreach (var token in tokens.Where(t => t.Type == TokenType.OpenParenthesis || t.Type == TokenType.CloseParenthesis))
                 {
@@ -378,7 +386,7 @@ namespace RuleEditor.ViewModels.Version3
                             current.HasError = true;
                             current.ErrorMessage = $"Property must be followed by an operator, not '{next.Value}'";
                         }
-                        
+
                         if (prev != null && prev.Type != TokenType.LogicalOperator && prev.Type != TokenType.OpenParenthesis)
                         {
                             errors.Add($"Property '{current.Value}' must be preceded by a logical operator or opening parenthesis, not '{prev.Value}'");
@@ -400,7 +408,7 @@ namespace RuleEditor.ViewModels.Version3
                             current.HasError = true;
                             current.ErrorMessage = $"Operator must be followed by a value, not '{next.Value}'";
                         }
-                        
+
                         if (prev == null || prev.Type != TokenType.Property)
                         {
                             errors.Add($"Operator '{current.Value}' must be preceded by a property");
@@ -416,7 +424,7 @@ namespace RuleEditor.ViewModels.Version3
                             current.HasError = true;
                             current.ErrorMessage = $"Value must be followed by a logical operator or closing parenthesis";
                         }
-                        
+
                         if (prev == null || prev.Type != TokenType.Operator)
                         {
                             errors.Add($"Value '{current.Value}' must be preceded by an operator");
@@ -473,39 +481,39 @@ namespace RuleEditor.ViewModels.Version3
         {
             if (allowedValues == null || !allowedValues.Any())
                 return true; // No restrictions
-                
+
             string valueToCheck = inputValue;
-            
+
             // Remove quotes if present
-            if ((valueToCheck.StartsWith("'") && valueToCheck.EndsWith("'")) || 
+            if ((valueToCheck.StartsWith("'") && valueToCheck.EndsWith("'")) ||
                 (valueToCheck.StartsWith("\"") && valueToCheck.EndsWith("\"")))
             {
                 valueToCheck = valueToCheck.Substring(1, valueToCheck.Length - 2);
             }
-            
+
             // First check for exact match
             if (allowedValues.Any(v => v.Equals(inputValue, StringComparison.OrdinalIgnoreCase)))
                 return true;
-                
+
             // Then check for matches where we extract just the name part
-            return allowedValues.Any(v => 
+            return allowedValues.Any(v =>
             {
                 string cleanValue = v;
-                
+
                 // Remove quotes if present
-                if ((cleanValue.StartsWith("'") && cleanValue.EndsWith("'")) || 
+                if ((cleanValue.StartsWith("'") && cleanValue.EndsWith("'")) ||
                     (cleanValue.StartsWith("\"") && cleanValue.EndsWith("\"")))
                 {
                     cleanValue = cleanValue.Substring(1, cleanValue.Length - 2);
                 }
-                
+
                 // Extract just the name part if it's in Name (ID) format
                 int parenIndex = cleanValue.IndexOf(" (");
                 if (parenIndex > 0)
                 {
                     cleanValue = cleanValue.Substring(0, parenIndex);
                 }
-                
+
                 return cleanValue.StartsWith(valueToCheck, StringComparison.OrdinalIgnoreCase);
             });
         }
