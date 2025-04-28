@@ -240,6 +240,7 @@ namespace RuleEditor.ViewModels.Version3
             if (suggestionsList.SelectedItem != null)
             {
                 ApplySelectedSuggestion();
+                expressionTextBox.Focus();
             }
         }
 
@@ -284,11 +285,16 @@ namespace RuleEditor.ViewModels.Version3
                 else
                 {
                     // Default: replace the current token
-                    string newText = expressionTextBox.Text.Substring(0, selectionStart) +
-                                     suggestion + " " +
-                                     expressionTextBox.Text.Substring(selectionStart + selectionLength);
+                    string afterToken = expressionTextBox.Text.Substring(selectionStart + selectionLength);
+                    bool needsSpace = string.IsNullOrEmpty(afterToken) || !char.IsWhiteSpace(afterToken[0]);
+
+                    string newText = expressionTextBox.Text.Substring(0, selectionStart)
+                                    + suggestion
+                                    + (needsSpace ? " " : "")
+                                    + afterToken;
+
                     expressionTextBox.Text = newText;
-                    expressionTextBox.CaretIndex = selectionStart + suggestion.Length + 1;
+                    expressionTextBox.CaretIndex = selectionStart + suggestion.Length + (needsSpace ? 1 : 0);
                 }
             }
             else

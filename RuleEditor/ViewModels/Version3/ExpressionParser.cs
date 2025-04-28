@@ -58,156 +58,56 @@ namespace RuleEditor.ViewModels.Version3
 
         public List<Token> Tokenize(string expression)
         {
-            if (string.IsNullOrWhiteSpace(expression))
-                return new List<Token>();
-
             var tokens = new List<Token>();
-            var currentPosition = 0;
-            var expressionLength = expression.Length;
-            var currentState = TokenType.Property; // Start expecting a property
+            if (string.IsNullOrWhiteSpace(expression))
+                return tokens;
 
-            while (currentPosition < expressionLength)
+            int position = 0;
+            int index = 0;
+            int length = expression.Length;
+
+            while (index < length)
             {
                 // Skip whitespace
-                while (currentPosition < expressionLength && char.IsWhiteSpace(expression[currentPosition]))
-                    currentPosition++;
+                while (index < length && char.IsWhiteSpace(expression[index]))
+                {
+                    index++;
+                    position++;
+                }
 
-                if (currentPosition >= expressionLength)
+                if (index >= length)
                     break;
 
-                // Check for parentheses
-                if (expression[currentPosition] == '(')
+                // Handle quoted values (single or double quotes)
+                if (expression[index] == '\'' || expression[index] == '\"')
                 {
-                    tokens.Add(new Token("(", TokenType.OpenParenthesis, currentPosition));
-                    currentPosition++;
-                    continue;
+                    char quote = expression[index];
+                    int start = index;
+                    index++; // Skip opening quote
+
+                    while (index < length && expression[index] != quote)
+                        index++;
+
+                    // Include the closing quote if present
+                    if (index < length && expression[index] == quote)
+                        index++;
+
+                    string quotedValue = expression.Substring(start, index - start);
+                    tokens.Add(new Token(quotedValue, TokenType.Value, position));
+                    position += quotedValue.Length;
                 }
-                else if (expression[currentPosition] == ')')
+                else
                 {
-                    tokens.Add(new Token(")", TokenType.CloseParenthesis, currentPosition));
-                    currentPosition++;
-                    continue;
+                    // Read until next whitespace
+                    int start = index;
+                    while (index < length && !char.IsWhiteSpace(expression[index]))
+                        index++;
+
+                    string part = expression.Substring(start, index - start);
+                    TokenType type = DetermineTokenType(part, tokens);
+                    tokens.Add(new Token(part, type, position));
+                    position += part.Length;
                 }
-
-                // Check for string literals
-                if (expression[currentPosition] == '\'' || expression[currentPosition] == '\"')
-                {
-                    var quoteChar = expression[currentPosition];
-                    var startPos = currentPosition;
-                    currentPosition++; // Skip opening quote
-                    var literalValue = string.Empty;
-
-                    // Find closing quote
-                    while (currentPosition < expressionLength && expression[currentPosition] != quoteChar)
-                    {
-                        literalValue += expression[currentPosition];
-                        currentPosition++;
-                    }
-
-                    if (currentPosition < expressionLength)
-                    {
-                        currentPosition++; // Skip closing quote
-
-                        // Skip any whitespace after the string literal
-                        while (currentPosition < expressionLength && char.IsWhiteSpace(expression[currentPosition]))
-                            currentPosition++;
-
-                        // Check if this string is for a property with restricted values
-                        var lastPropertyToken = tokens.LastOrDefault(t => t.Type == TokenType.Property);
-                        var lastOperatorToken = tokens.LastOrDefault(t => t.Type == TokenType.Operator);
-
-                        // If we have a property followed by an operator before this string value
-                        if (lastPropertyToken != null && lastOperatorToken != null &&
-                            lastPropertyToken.Position < lastOperatorToken.Position)
-                        {
-                            var propertyName = lastPropertyToken.Value;
-                            var propertyInfo = _availableProperties.FirstOrDefault(p =>
-                                p.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase));
-
-                            // If the property has restricted values, use RestrictedValue token type
-                            if (propertyInfo?.AllowedValues != null)
-                            {
-                                tokens.Add(new Token(quoteChar + literalValue + quoteChar,
-                                    TokenType.RestrictedValue,
-                                    startPos,
-                                    possibleTypes: null,
-                                    possibleValues: propertyInfo.AllowedValues));
-                            }
-                            else
-                            {
-                                tokens.Add(new Token(quoteChar + literalValue + quoteChar, TokenType.Value, startPos));
-                            }
-                        }
-                        else
-                        {
-                            tokens.Add(new Token(quoteChar + literalValue + quoteChar, TokenType.Value, startPos));
-                        }
-                    }
-                    else
-                    {
-                        // Missing closing quote
-                        tokens.Add(new Token(quoteChar + literalValue, TokenType.Value, startPos)
-                        {
-                            HasError = true,
-                            ErrorMessage = "Missing closing quote"
-                        });
-                    }
-                }
-
-                // Try to match operators
-                var remainingText = expression.Substring(currentPosition);
-                var operatorMatch = _comparisonOperators
-                    .Concat(_logicalOperators)
-                    .OrderByDescending(op => op.Length) // Try longer operators first
-                    .FirstOrDefault(op =>
-                        remainingText.StartsWith(op, StringComparison.OrdinalIgnoreCase) &&
-                        (remainingText.Length == op.Length || !char.IsLetterOrDigit(remainingText[op.Length])));
-
-                if (operatorMatch != null)
-                {
-                    var tokenType = _logicalOperators.Contains(operatorMatch, StringComparer.OrdinalIgnoreCase)
-                        ? TokenType.LogicalOperator
-                        : TokenType.Operator;
-
-                    tokens.Add(new Token(operatorMatch, tokenType, currentPosition));
-                    currentPosition += operatorMatch.Length;
-                    continue;
-                }
-
-                // Try to match a word (property name, value, etc.)
-                var wordMatch = Regex.Match(remainingText, @"^\w+");
-                if (wordMatch.Success)
-                {
-                    var word = wordMatch.Value;
-                    var tokenType = DetermineTokenType(word, tokens);
-
-                    // Create token with appropriate possible types based on what it could be
-                    var possibleTypes = new List<TokenType> { tokenType };
-
-                    // If it looks like a property but follows an operator, it could also be a value
-                    if (tokenType == TokenType.Property &&
-                        tokens.LastOrDefault()?.Type == TokenType.Operator)
-                    {
-                        possibleTypes.Add(TokenType.Value);
-                    }
-                    // If it's a value but at the start of an expression, it could also be a property
-                    else if (tokenType == TokenType.Value &&
-                             (tokens.Count == 0 ||
-                              tokens.LastOrDefault()?.Type == TokenType.LogicalOperator ||
-                              tokens.LastOrDefault()?.Type == TokenType.OpenParenthesis))
-                    {
-                        possibleTypes.Add(TokenType.Property);
-                    }
-
-                    tokens.Add(new Token(word, tokenType, currentPosition, possibleTypes));
-                    currentPosition += word.Length;
-                    continue;
-                }
-
-                // If we get here, we couldn't match anything recognizable
-                if (currentPosition < expressionLength)
-                    tokens.Add(new Token(expression[currentPosition].ToString(), TokenType.Unknown, currentPosition));
-                currentPosition++;
             }
 
             return tokens;
@@ -414,6 +314,17 @@ namespace RuleEditor.ViewModels.Version3
                             errors.Add($"Operator '{current.Value}' must be preceded by a property");
                             current.HasError = true;
                             current.ErrorMessage = "Operator must be preceded by a property";
+                        }
+
+
+                        // Check if the operator is a valid, full operator
+                        bool isValidOperator = _comparisonOperators.Contains(current.Value, StringComparer.OrdinalIgnoreCase);
+
+                        if (!isValidOperator)
+                        {
+                            errors.Add($"Invalid operator '{current.Value}'.");
+                            current.HasError = true;
+                            current.ErrorMessage = $"Invalid operator '{current.Value}'.";
                         }
                         break;
 

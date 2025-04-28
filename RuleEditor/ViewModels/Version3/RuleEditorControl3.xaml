@@ -129,7 +129,7 @@
                   ItemContainerStyle="{StaticResource SuggestionListBoxItemStyle}"
                   SelectionChanged="SuggestionsList_SelectionChanged"
                   PreviewKeyDown="SuggestionsList_PreviewKeyDown"
-                  MouseDoubleClick="SuggestionsList_MouseDoubleClick"
+                  MouseLeftButtonUp="SuggestionsList_MouseDoubleClick"
                   Focusable="True"
                   KeyboardNavigation.TabNavigation="Cycle">
                   <ListBox.ItemTemplate>
