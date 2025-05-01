@@ -274,11 +274,8 @@ namespace RuleEditor.ViewModels.Version3
                 if (CurrentToken.PossibleTypes.Contains(TokenType.Property))
                 {
                     // Suggest properties matching the prefix
-                    var matchingProperties = AvailableProperties
-                        .Select(p => p.Name)
-                        .Where(name => name.StartsWith(tokenPrefix, StringComparison.OrdinalIgnoreCase))
-                        .ToList();
-                    newSuggestions.AddRange(matchingProperties);
+                    var allProperties = AvailableProperties.Select(p => p.Name).ToList();
+newSuggestions.AddRange(allProperties);
                 }
 
                 if (CurrentToken.PossibleTypes.Contains(TokenType.Operator))
@@ -305,6 +302,11 @@ namespace RuleEditor.ViewModels.Version3
                 }
 
                 // ... (rest of your suggestion logic for values, logical operators, etc.)
+                if (CurrentToken.PossibleTypes.Contains(TokenType.LogicalOperator))
+{
+    // Always show all logical operators
+    newSuggestions.AddRange(new List<string> { "AND", "OR"});
+}
             }
 
             // Always update suggestions to ensure the popup shows the latest suggestions
