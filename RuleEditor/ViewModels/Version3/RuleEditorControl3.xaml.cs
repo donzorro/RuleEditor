@@ -184,6 +184,33 @@ namespace RuleEditor.ViewModels.Version3
         private void ExpressionTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
         {
             _lastKeyPressed = e.Key;
+
+            if (e.Key == Key.Back)
+            {
+                int caret = expressionTextBox.CaretIndex;
+                string text = expressionTextBox.Text;
+
+                // Ensure caret is not at start or end of text
+                if (caret > 0 && caret < text.Length)
+                {
+                    char before = text[caret - 1];
+                    char after = text[caret];
+
+                    // Check if both sides are matching quotes
+                    if ((before == '\'' && after == '\'') || (before == '"' && after == '"'))
+                    {
+                        // Remove both quotes
+                        string newText = text.Remove(caret - 1, 2);
+
+                        // Update text and caret
+                        expressionTextBox.Text = newText;
+                        expressionTextBox.CaretIndex = caret - 1;
+                        e.Handled = true;
+                        return;
+                    }
+                }
+            }
+
             if (suggestionsPopup.IsOpen)
             {
                 switch (e.Key)
@@ -227,6 +254,7 @@ namespace RuleEditor.ViewModels.Version3
                         suggestionsPopup.IsOpen = false;
                         e.Handled = true;
                         break;
+                
                 }
             }
 
