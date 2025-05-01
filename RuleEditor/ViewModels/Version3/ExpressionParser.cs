@@ -28,6 +28,8 @@ namespace RuleEditor.ViewModels.Version3
         public bool HasError { get; set; }
         public string ErrorMessage { get; set; }
         public IEnumerable<string> PossibleValues { get; set; }
+        // New property
+        public bool RequiresParameter { get; set; }
 
 
 

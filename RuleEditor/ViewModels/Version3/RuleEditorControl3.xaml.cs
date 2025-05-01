@@ -13,7 +13,7 @@ namespace RuleEditor.ViewModels.Version3
 {
     public partial class RuleEditorControl3 : UserControl
     {
-        private RuleEditorViewModel3 _viewModel;
+        private RuleEditorControl3ViewModel _viewModel;
         private DispatcherTimer _validationTimer;
         private bool _isNavigatingSuggestions = false;
 
@@ -21,7 +21,7 @@ namespace RuleEditor.ViewModels.Version3
         {
             InitializeComponent();
 
-            _viewModel = new RuleEditorViewModel3();
+            _viewModel = new RuleEditorControl3ViewModel();
             DataContext = _viewModel;
 
             // Set up validation timer
@@ -45,7 +45,7 @@ namespace RuleEditor.ViewModels.Version3
         private void ViewModel_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
             // When SyntaxErrorObjects changes, update the error adorners
-            if (e.PropertyName == nameof(RuleEditorViewModel3.SyntaxErrorObjects))
+            if (e.PropertyName == nameof(RuleEditorControl3ViewModel.SyntaxErrorObjects))
             {
                 DrawErrorUnderlines();
             }
@@ -228,9 +228,29 @@ namespace RuleEditor.ViewModels.Version3
                         suggestionsPopup.IsOpen = false;
                         e.Handled = true;
                         break;
-                
                 }
             }
+
+            //var token = _viewModel.CurrentToken;
+            //if (token == null)
+            //    return;
+
+            //// Only restrict for Property or LogicalOperator tokens
+            //if (token.PossibleTypes.Contains(TokenType.Property) || token.PossibleTypes.Contains(TokenType.LogicalOperator))
+            //{
+            //    // Simulate what the token would be after typing this character
+            //    int caretInToken = expressionTextBox.CaretIndex - token.Position;
+            //    string before = token.Value.Substring(0, Math.Max(0, caretInToken));
+            //    string after = token.Value.Substring(Math.Max(0, caretInToken));
+            //    string simulatedToken = before + e.Key.ToString() + after; // Use e.Key.ToString() instead of e.Text
+
+            //    // Check if any suggestion starts with the simulated token (case-insensitive)
+            //    bool valid = _viewModel.Suggestions.Any(s => s.StartsWith(simulatedToken, StringComparison.OrdinalIgnoreCase));
+            //    if (!valid)
+            //    {
+            //        e.Handled = true; // Block the input
+            //    }
+            //}
 
             // Start validation timer when typing
             if (!e.Handled && e.Key != Key.Up && e.Key != Key.Down)

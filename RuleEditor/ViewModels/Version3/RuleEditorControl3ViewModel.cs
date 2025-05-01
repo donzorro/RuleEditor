@@ -9,7 +9,7 @@ using System.Windows.Input;
 
 namespace RuleEditor.ViewModels.Version3
 {
-    public class RuleEditorViewModel3 : INotifyPropertyChanged
+    public class RuleEditorControl3ViewModel : INotifyPropertyChanged
     {
         private ExpressionParser _parser;
         private ExpressionCompiler _compiler;
@@ -23,7 +23,7 @@ namespace RuleEditor.ViewModels.Version3
         private string _testResultMessage = "";
         private int _caretPosition;
         private Token _currentToken;
-        
+
         // Sample friend data for demonstration purposes
         private readonly List<(string Id, string FullName)> _sampleFriends = new List<(string Id, string FullName)>
         {
@@ -163,7 +163,7 @@ namespace RuleEditor.ViewModels.Version3
         public ICommand ValidateCommand { get; private set; }
         public ICommand TestExpressionCommand { get; private set; }
 
-        public RuleEditorViewModel3()
+        public RuleEditorControl3ViewModel()
         {
             InitializeAvailableProperties();
             _parser = new ExpressionParser(AvailableProperties);
@@ -185,9 +185,9 @@ namespace RuleEditor.ViewModels.Version3
                 new RulePropertyInfo { Name = "Email", Type = typeof(string), Description = "Email address" },
                 new RulePropertyInfo { Name = "Emoji", Type = typeof(string), Description = "Emoji address" },
                 new RulePropertyInfo { Name = "LastLoginDate", Type = typeof(DateTime), Description = "Last login timestamp" },
-                new RulePropertyInfo { 
-                    Name = "Friends", 
-                    Type = typeof(string), 
+                new RulePropertyInfo {
+                    Name = "Friends",
+                    Type = typeof(string),
                     Description = "Comma-separated list of friend user IDs",
                     AllowedValues = _sampleFriends.Select(f => $"'{f.FullName} ({f.Id})'")
                 }
@@ -228,90 +228,81 @@ namespace RuleEditor.ViewModels.Version3
 
         private void UpdateSuggestions()
         {
-            List<string> newSuggestions = new List<string>();
-
             if (CurrentToken == null)
             {
-                // If we're not on a token, determine what kind of token would be expected next
-                newSuggestions = GetExpectedNextTokenSuggestions();
+                Suggestions = GetExpectedNextTokenSuggestions();
+                return;
             }
-            else
+
+            var prevToken = Tokens.LastOrDefault(t => t.Position + t.Length <= CaretPosition);
+            if (ShouldSuggestLogicalOperators(prevToken))
             {
-                // --- FIX: Only suggest logical operators after a value/close parenthesis if caret is after a space ---
-                var prevToken = Tokens.LastOrDefault(t => t.Position + t.Length <= CaretPosition);
-                if (prevToken != null &&
-                    (prevToken.Type == TokenType.Value || prevToken.Type == TokenType.CloseParenthesis) &&
-                    CaretPosition >= prevToken.Position + prevToken.Length)
-                {
-                    bool atEnd = CaretPosition >= (ExpressionText?.Length ?? 0);
-                    bool nextIsSpace = !atEnd && ExpressionText[CaretPosition] == ' ';
-                    bool lastCharIsSpace = !string.IsNullOrEmpty(ExpressionText) && CaretPosition > 0 && ExpressionText[CaretPosition - 1] == ' ';
-                    if (nextIsSpace || lastCharIsSpace)
-                    {
-                        Suggestions = new List<string> { "AND", "OR" };
-                        return;
-                    }
-                    else
-                    {
-                        Suggestions = new List<string>();
-                        return;
-                    }
-                }
-
-                // Calculate the prefix up to the caret within the current token
-                int prefixLength = Math.Max(0, CaretPosition - CurrentToken.Position);
-                string tokenPrefix = "";
-                if (CaretPosition >= CurrentToken.Position && CaretPosition <= CurrentToken.Position + CurrentToken.Length)
-                {
-                    tokenPrefix = ExpressionText.Substring(CurrentToken.Position, prefixLength);
-                }
-                else
-                {
-                    // fallback: use the whole token value
-                    tokenPrefix = CurrentToken.Value ?? "";
-                }
-
-                if (CurrentToken.PossibleTypes.Contains(TokenType.Property))
-                {
-                    // Suggest properties matching the prefix
-                    var allProperties = AvailableProperties.Select(p => p.Name).ToList();
-newSuggestions.AddRange(allProperties);
-                }
-
-                if (CurrentToken.PossibleTypes.Contains(TokenType.Operator))
-                {
-                    // Get the previous property to determine valid operators
-                    var prevPropertyToken = Tokens
-                        .LastOrDefault(t => t.Position < CurrentToken.Position && t.Type == TokenType.Property);
-
-                    Type propertyType = typeof(string); // fallback
-                    if (prevPropertyToken != null)
-                    {
-                        var propInfo = AvailableProperties
-                            .FirstOrDefault(p => p.Name.Equals(prevPropertyToken.Value, StringComparison.OrdinalIgnoreCase));
-                        if (propInfo != null)
-                            propertyType = propInfo.Type;
-                    }
-
-                    var allOperators = GetValidOperatorsForType(propertyType);
-
-                    var matchingOperators = allOperators
-                        .Where(op => op.StartsWith(tokenPrefix, StringComparison.OrdinalIgnoreCase))
-                        .ToList();
-                    newSuggestions.AddRange(matchingOperators);
-                }
-
-                // ... (rest of your suggestion logic for values, logical operators, etc.)
-                if (CurrentToken.PossibleTypes.Contains(TokenType.LogicalOperator))
-{
-    // Always show all logical operators
-    newSuggestions.AddRange(new List<string> { "AND", "OR"});
-}
+                Suggestions = new List<string> { "AND", "OR" };
+                return;
             }
 
-            // Always update suggestions to ensure the popup shows the latest suggestions
+            string tokenPrefix = GetTokenPrefix(CurrentToken);
+            var newSuggestions = new List<string>();
+
+            if (CurrentToken.PossibleTypes.Contains(TokenType.Property))
+            {
+                newSuggestions.AddRange(AvailableProperties.Select(p => p.Name));
+            }
+
+            if (CurrentToken.PossibleTypes.Contains(TokenType.Operator))
+            {
+                newSuggestions.AddRange(GetMatchingOperatorsForCurrentToken(tokenPrefix));
+            }
+
+            if (CurrentToken.PossibleTypes.Contains(TokenType.LogicalOperator))
+            {
+                newSuggestions.AddRange(new List<string> { "AND", "OR" });
+            }
+
             Suggestions = newSuggestions.Distinct().ToList();
         }
+
+        private bool ShouldSuggestLogicalOperators(Token prevToken)
+        {
+            if (prevToken == null) return false;
+
+            bool isValueOrCloseParenthesis = prevToken.Type == TokenType.Value || prevToken.Type == TokenType.CloseParenthesis;
+            bool isCaretAfterToken = CaretPosition >= prevToken.Position + prevToken.Length;
+            bool atEnd = CaretPosition >= (ExpressionText?.Length ?? 0);
+            bool nextIsSpace = !atEnd && ExpressionText[CaretPosition] == ' ';
+            bool lastCharIsSpace = CaretPosition > 0 && ExpressionText[CaretPosition - 1] == ' ';
+
+            return isValueOrCloseParenthesis && (nextIsSpace || lastCharIsSpace);
+        }
+
+        private string GetTokenPrefix(Token token)
+        {
+            int prefixLength = Math.Max(0, CaretPosition - token.Position);
+            if (CaretPosition >= token.Position && CaretPosition <= token.Position + token.Length)
+            {
+                return ExpressionText.Substring(token.Position, prefixLength);
+            }
+            return token.Value ?? string.Empty;
+        }
+
+        private IEnumerable<string> GetMatchingOperatorsForCurrentToken(string tokenPrefix)
+        {
+            var prevPropertyToken = Tokens.LastOrDefault(t => t.Position < CurrentToken.Position && t.Type == TokenType.Property);
+            Type propertyType = typeof(string); // Default to string
+
+            if (prevPropertyToken != null)
+            {
+                var propInfo = AvailableProperties.FirstOrDefault(p => p.Name.Equals(prevPropertyToken.Value, StringComparison.OrdinalIgnoreCase));
+                if (propInfo != null)
+                {
+                    propertyType = propInfo.Type;
+                }
+            }
+
+            var allOperators = GetValidOperatorsForType(propertyType);
+            return allOperators.Where(op => op.StartsWith(tokenPrefix, StringComparison.OrdinalIgnoreCase));
+        }
+
 
         private List<string> GetExpectedNextTokenSuggestions()
         {
@@ -402,17 +393,17 @@ newSuggestions.AddRange(allProperties);
         private List<string> GetValidOperatorsForType(Type type)
         {
             var operators = new List<string> { "==", "!=" };
-            
+
             if (type == typeof(string))
             {
                 operators.AddRange(new[] { "CONTAINS", "STARTSWITH", "ENDSWITH" });
             }
-            
+
             if (type == typeof(int) || type == typeof(decimal) || type == typeof(DateTime))
             {
                 operators.AddRange(new[] { ">", "<", ">=", "<=" });
             }
-            
+
             return operators;
         }
 
@@ -422,16 +413,16 @@ newSuggestions.AddRange(allProperties);
             if (Tokens.Count >= 2)
             {
                 var lastOperatorToken = Tokens.LastOrDefault(t => t.Type == TokenType.Operator);
-                var propertyToken = Tokens.LastOrDefault(t => 
-                    t.Position < (lastOperatorToken?.Position ?? 0) && 
+                var propertyToken = Tokens.LastOrDefault(t =>
+                    t.Position < (lastOperatorToken?.Position ?? 0) &&
                     t.Type == TokenType.Property);
-                
+
                 if (propertyToken != null)
                 {
                     // Check if this property has restricted values
                     var propInfo = AvailableProperties
                         .FirstOrDefault(p => p.Name.Equals(propertyToken.Value, StringComparison.OrdinalIgnoreCase));
-                    
+
                     if (propInfo != null && propInfo.AllowedValues != null)
                     {
                         // Return the allowed values for this property
@@ -439,7 +430,7 @@ newSuggestions.AddRange(allProperties);
                     }
                 }
             }
-            
+
             // If no specific allowed values, return default values for the type
             if (type == typeof(bool))
             {
@@ -447,14 +438,14 @@ newSuggestions.AddRange(allProperties);
                     .Where(v => string.IsNullOrEmpty(prefix) || v.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                     .ToList();
             }
-            
+
             if (type == typeof(int))
             {
                 return new List<string> { "0", "1", "10", "100" }
                     .Where(v => string.IsNullOrEmpty(prefix) || v.StartsWith(prefix))
                     .ToList();
             }
-            
+
             if (type == typeof(string))
             {
                 // For strings, suggest using quotes
@@ -463,7 +454,7 @@ newSuggestions.AddRange(allProperties);
                     return new List<string> { "'" };
                 }
             }
-            
+
             return new List<string>();
         }
 
