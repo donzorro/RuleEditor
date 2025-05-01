@@ -48,9 +48,14 @@ namespace RuleEditor.ViewModels.Version3
 
     public class ExpressionParser
     {
+        private static readonly List<string> _logicalOperators = new List<string> { "AND", "OR", "NOT" };
+
+        // Expose logical operators as a public property
+        public static IReadOnlyList<string> LogicalOperators => _logicalOperators;
+
         private readonly List<RulePropertyInfo> _availableProperties;
         private static readonly List<string> _comparisonOperators = new List<string> { "==", "!=", ">", "<", ">=", "<=", "CONTAINS", "STARTSWITH", "ENDSWITH" };
-        private static readonly List<string> _logicalOperators = new List<string> { "AND", "OR", "NOT" };
+        
         private TokenType _expectedNextTokenType;
 
         public ExpressionParser(List<RulePropertyInfo> availableProperties)

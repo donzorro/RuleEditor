@@ -228,35 +228,25 @@ namespace RuleEditor.ViewModels.Version3
 
         private void UpdateSuggestions()
         {
+            List<string> newSuggestions = new List<string>();
+
             if (CurrentToken == null)
             {
-                Suggestions = GetExpectedNextTokenSuggestions();
-                return;
+                // If no token, suggest properties or logical operators
+                newSuggestions.AddRange(GetExpectedNextTokenSuggestions());
             }
-
-            var prevToken = Tokens.LastOrDefault(t => t.Position + t.Length <= CaretPosition);
-            if (ShouldSuggestLogicalOperators(prevToken))
+            else
             {
-                Suggestions = new List<string> { "AND", "OR" };
-                return;
-            }
-
-            string tokenPrefix = GetTokenPrefix(CurrentToken);
-            var newSuggestions = new List<string>();
-
-            if (CurrentToken.PossibleTypes.Contains(TokenType.Property))
-            {
-                newSuggestions.AddRange(AvailableProperties.Select(p => p.Name));
-            }
-
-            if (CurrentToken.PossibleTypes.Contains(TokenType.Operator))
-            {
-                newSuggestions.AddRange(GetMatchingOperatorsForCurrentToken(tokenPrefix));
-            }
-
-            if (CurrentToken.PossibleTypes.Contains(TokenType.LogicalOperator))
-            {
-                newSuggestions.AddRange(new List<string> { "AND", "OR" });
+                var prevToken = Tokens.LastOrDefault(t => t.Position + t.Length <= CaretPosition);
+                if (ShouldSuggestLogicalOperators(prevToken))
+                {
+                    // Use logical operators from ExpressionParser
+                    newSuggestions.AddRange(ExpressionParser.LogicalOperators);
+                }
+                else
+                {
+                    // Other suggestion logic...
+                }
             }
 
             Suggestions = newSuggestions.Distinct().ToList();
