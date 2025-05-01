@@ -87,84 +87,54 @@ namespace RuleEditor.ViewModels.Version3
             _viewModel.CaretPosition = expressionTextBox.CaretIndex;
             ClearErrorAdorners();
 
-            if (_lastKeyPressed != Key.Back && _lastKeyPressed != Key.Delete)
-            {
-                if (suggestionsList.Items.Count > 0 && !string.IsNullOrEmpty(_viewModel.CurrentToken?.Value))
-                {
-                    string typed = _viewModel.CurrentToken.Value;
-                    string suggestion = suggestionsList.Items[0].ToString();
-
-                    if (suggestion.StartsWith(typed, StringComparison.OrdinalIgnoreCase) && suggestion.Length > typed.Length)
-                    {
-                        int tokenStart = _viewModel.CurrentToken.Position;
-                        int tokenEnd = tokenStart + typed.Length;
-                        string before = expressionTextBox.Text.Substring(0, tokenStart);
-                        string after = expressionTextBox.Text.Substring(tokenEnd);
-
-                        string newText = before + suggestion + after;
-
-                        if (expressionTextBox.Text != newText)
-                        {
-                            _isInternalUpdate = true;
-                            expressionTextBox.Text = newText;
-                            // Set selection directly
-                            expressionTextBox.SelectionStart = tokenStart + typed.Length;
-                            expressionTextBox.SelectionLength = suggestion.Length - typed.Length;
-                            _isInternalUpdate = false;
-
-                            // Update ViewModel directly, but do NOT raise PropertyChanged
-                            _viewModel.ExpressionText = newText;
-                            _viewModel.CaretPosition = expressionTextBox.CaretIndex;
-                        }
-                    }
-                }
-            }
-
             UpdateSuggestionsPopup();
             _validationTimer.Stop();
             _validationTimer.Start();
         }
 
         private void ExpressionTextBox_SelectionChanged(object sender, RoutedEventArgs e)
-        {
-            if (_isNavigatingSuggestions)
-                return;
+    {
+        if (_isNavigatingSuggestions)
+            return;
 
-            // Update caret position in the view model
-            _viewModel.CaretPosition = expressionTextBox.CaretIndex;
+        // Update caret position in the view model
+        _viewModel.CaretPosition = expressionTextBox.CaretIndex;
 
-            // Show suggestions popup if there are suggestions available
-            UpdateSuggestionsPopup();
-        }
+        // Always show and update suggestions popup
+        UpdateSuggestionsPopup();
+    }
 
-        private void UpdateSuggestionsPopup()
-        {
-            // Always update the suggestions list before deciding whether to show the popup
-            suggestionsList.ItemsSource = _viewModel.Suggestions;
-            
-            if (_viewModel.Suggestions.Count > 0)
-            {
-                // Position the popup relative to the caret position
-                suggestionsPopup.HorizontalOffset = CalculatePopupHorizontalOffset();
-                
-                // Show the popup
-                suggestionsPopup.IsOpen = true;
-                
-                // Select the first item
-                if (suggestionsList.Items.Count > 0)
-                {
-                    suggestionsList.SelectedIndex = 0;
-                }
-                
-                // Make sure the popup stays open
-                suggestionsPopup.StaysOpen = true;
-            }
-            else
-            {
-                // Close the popup if there are no suggestions
-                suggestionsPopup.IsOpen = false;
-            }
-        }
+       private void UpdateSuggestionsPopup()
+{
+    // Always update the suggestions list before deciding whether to show the popup
+    suggestionsList.ItemsSource = _viewModel.Suggestions;
+
+    // Always show the popup when the textbox is focused
+    suggestionsPopup.IsOpen = expressionTextBox.IsFocused;
+
+    // Try to auto-select the best suggestion based on caret position and prefix
+    string prefix = "";
+    if (_viewModel.CurrentToken != null && _viewModel.CaretPosition >= _viewModel.CurrentToken.Position)
+    {
+        int prefixLength = Math.Max(0, _viewModel.CaretPosition - _viewModel.CurrentToken.Position);
+        prefix = _viewModel.CurrentToken.Value?.Substring(0, Math.Min(prefixLength, _viewModel.CurrentToken.Value.Length)) ?? "";
+    }
+
+    // Find the best match in the suggestions list
+    var match = suggestionsList.Items
+        .Cast<string>()
+        .FirstOrDefault(s => !string.IsNullOrEmpty(prefix) && s.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+
+    if (match != null)
+        suggestionsList.SelectedItem = match;
+    else if (suggestionsList.Items.Count > 0)
+        suggestionsList.SelectedIndex = 0;
+    else
+        suggestionsList.SelectedIndex = -1;
+
+    // Optionally, show a "No suggestions" message if the list is empty
+    // (Add a TextBlock in your XAML and set its visibility here if needed)
+}
 
         private double CalculatePopupHorizontalOffset()
         {
