@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text.RegularExpressions;
 using RuleEditor.Models;
 
 namespace RuleEditor.ViewModels.Version3
@@ -21,7 +17,7 @@ namespace RuleEditor.ViewModels.Version3
     public class Token
     {
         public string Value { get; set; }
-        public TokenType Type { get; set; }
+        public TokenType TokenType { get; set; }
         public IEnumerable<TokenType> PossibleTypes { get; set; }
         public int Position { get; set; }
         public int Length { get; set; }
@@ -36,7 +32,7 @@ namespace RuleEditor.ViewModels.Version3
         public Token(string value, TokenType type, int position, IEnumerable<TokenType> possibleTypes = null, IEnumerable<string> possibleValues = null)
         {
             Value = value;
-            Type = type;
+            TokenType = type;
             Position = position;
             Length = value?.Length ?? 0;
             PossibleTypes = possibleTypes ?? new[] { type };
@@ -53,14 +49,194 @@ namespace RuleEditor.ViewModels.Version3
         // Expose logical operators as a public property
         public static IReadOnlyList<string> LogicalOperators => _logicalOperators;
 
-        private readonly List<RulePropertyInfo> _availableProperties;
-        private static readonly List<string> _comparisonOperators = new List<string> { "==", "!=", ">", "<", ">=", "<=", "CONTAINS", "STARTSWITH", "ENDSWITH" };
+        private List<RulePropertyInfo> AvailableProperties 
+        {
+            get; set; 
         
+        }
+        private static readonly List<string> ComparisonOperators = new List<string> { "==", "!=", ">", "<", ">=", "<=", "CONTAINS", "STARTSWITH", "ENDSWITH" };
+
         private TokenType _expectedNextTokenType;
 
         public ExpressionParser(List<RulePropertyInfo> availableProperties)
         {
-            _availableProperties = availableProperties ?? new List<RulePropertyInfo>();
+            AvailableProperties = availableProperties ?? new List<RulePropertyInfo>();
+        }
+
+        public List<string> GetExpectedNextTokenSuggestions(List<Token> Tokens, int CaretPosition)
+        {
+            // If there are no tokens yet or we're at the end, suggest properties or logical operators
+            if (Tokens.Count == 0)
+            {
+                return AvailableProperties.Select(p => p.Name).ToList();
+            }
+
+            // Find the last token before the caret
+            var lastToken = Tokens.LastOrDefault(t => t.Position < CaretPosition);
+            if (lastToken == null)
+            {
+                return AvailableProperties.Select(p => p.Name).ToList();
+            }
+
+            // Special case for numeric values - if we're at the end of a number with no space,
+            // don't show any suggestions (user might still be typing the number)
+            if (lastToken.TokenType == TokenType.Value &&
+                decimal.TryParse(lastToken.Value, out _) &&
+                CaretPosition == lastToken.Position + lastToken.Length)
+            {
+                return new List<string>(); // Return empty list to indicate no suggestions
+            }
+
+            // --- FIX: After a value or close parenthesis, only suggest logical operators ---
+            if ((lastToken.TokenType == TokenType.Value || lastToken.TokenType == TokenType.CloseParenthesis)
+                && CaretPosition >= lastToken.Position + lastToken.Length)
+            {
+                return new List<string> { "AND", "OR" };
+            }
+
+            // Suggest based on the last token type
+            switch (lastToken.TokenType)
+            {
+                case TokenType.Property:
+                    // After a property, suggest operators
+                    var propInfo = AvailableProperties
+                        .FirstOrDefault(p => p.Name.Equals(lastToken.Value, StringComparison.OrdinalIgnoreCase));
+
+                    return propInfo != null
+                        ? GetValidOperatorsForType(propInfo.Type)
+                        : new List<string>();
+
+                case TokenType.Operator:
+                    // After an operator, suggest values
+                    var prevPropToken = Tokens
+                        .LastOrDefault(t => t.Position < lastToken.Position && t.TokenType == TokenType.Property);
+
+                    if (prevPropToken != null)
+                    {
+                        var prop = AvailableProperties
+                            .FirstOrDefault(p => p.Name.Equals(prevPropToken.Value, StringComparison.OrdinalIgnoreCase));
+
+                        // Special case for Friends property
+                        if (prop != null && prop.AllowedValues != null)
+                        {
+                            // Just return the full list of formatted friend suggestions
+                            return prop.AllowedValues.ToList();
+                        }
+
+                        return prop != null
+                            ? GetCommonValuesForType(Tokens, "")
+                            : new List<string>();
+                    }
+                    return new List<string>();
+
+                case TokenType.Value:
+                case TokenType.CloseParenthesis:
+                    // Already handled above, but keep for completeness
+                    return new List<string> { "AND", "OR" };
+
+                case TokenType.LogicalOperator:
+                    // After a logical operator, suggest properties or opening parenthesis
+                    return AvailableProperties.Select(p => p.Name)
+                        .Concat(new[] { "(" })
+                        .ToList();
+
+                case TokenType.OpenParenthesis:
+                    // After an opening parenthesis, suggest properties
+                    return AvailableProperties.Select(p => p.Name).ToList();
+
+                default:
+                    return new List<string>();
+            }
+        }
+
+        private List<string> GetValidOperatorsForType(Type type)
+        {
+            var operators = new List<string> { "==", "!=" };
+
+            if (type == typeof(string))
+            {
+                operators.AddRange(new[] { "CONTAINS", "STARTSWITH", "ENDSWITH" });
+            }
+
+            if (type == typeof(int) || type == typeof(decimal) || type == typeof(DateTime))
+            {
+                operators.AddRange(new[] { ">", "<", ">=", "<=" });
+            }
+
+            return operators;
+        }
+
+        private List<string> GetCommonValuesForType(List<Token> Tokens, string prefix = "")
+        {
+            // Get the property info by checking the token values
+            if (Tokens.Count >= 2)
+            {
+                var lastOperatorToken = Tokens.LastOrDefault(t => t.TokenType == TokenType.Operator);
+                var propertyToken = Tokens.LastOrDefault(t =>
+                    t.Position < (lastOperatorToken?.Position ?? 0) &&
+                    t.TokenType == TokenType.Property);
+
+                if (propertyToken != null)
+                {
+                    // Check if this property has restricted values
+                    var propInfo = AvailableProperties
+                        .FirstOrDefault(p => p.Name.Equals(propertyToken.Value, StringComparison.OrdinalIgnoreCase));
+
+                    if (propInfo != null)
+                        if (propInfo.AllowedValues != null)
+                        {
+                            // Return the allowed values for this property
+                            return propInfo.AllowedValues.ToList();
+                        }
+                        else
+                        {
+                            if (propInfo.Type == typeof(string))
+                            {
+                                // For strings, suggest using quotes
+                                if (!prefix.StartsWith("'") && !prefix.StartsWith("\""))
+                                {
+                                    return new List<string> { "'" };
+                                }
+                            }
+                            else if (propInfo.Type == typeof(int))
+                            {
+                                // For integers, suggest numeric values
+                                return new List<string> { "0", "1", "10", "100" }
+                                    .Where(v => string.IsNullOrEmpty(prefix) || v.StartsWith(prefix))
+                                    .ToList();
+                            }
+                            else if (propInfo.Type == typeof(bool))
+                            {
+                                // For booleans, suggest true/false
+                                return new List<string> { "true", "false" }
+                                    .Where(v => string.IsNullOrEmpty(prefix) || v.StartsWith(prefix))
+                                    .ToList();
+                            }
+
+                        }
+                }
+            }
+
+            // If no specific allowed values, return default values for the type
+           
+
+            //if (type == typeof(int))
+            //{
+            //    return new List<string> { "0", "1", "10", "100" }
+            //        .Where(v => string.IsNullOrEmpty(prefix) || v.StartsWith(prefix))
+            //        .ToList();
+            //}
+
+            //if (type == typeof(string))
+            //{
+            //    // For strings, suggest using quotes
+            //    if (!prefix.StartsWith("'") && !prefix.StartsWith("\""))
+            //    {
+            //        return new List<string> { "'" };
+            //    }
+            //}
+
+            return new List<string>();
         }
 
         public List<Token> Tokenize(string expression)
@@ -100,7 +276,13 @@ namespace RuleEditor.ViewModels.Version3
                         index++;
 
                     string quotedValue = expression.Substring(start, index - start);
-                    tokens.Add(new Token(quotedValue, TokenType.Value, position));
+
+                    var newValueToken = new Token(quotedValue, TokenType.Value, position);
+
+                    var property = tokens.Where(q => q.TokenType == TokenType.Property).LastOrDefault();
+                    newValueToken.PossibleValues = GetCommonValuesForType(tokens, quotedValue);
+
+                    tokens.Add(newValueToken);
                     position += quotedValue.Length;
                 }
                 else
@@ -112,7 +294,30 @@ namespace RuleEditor.ViewModels.Version3
 
                     string part = expression.Substring(start, index - start);
                     TokenType type = DetermineTokenType(part, tokens);
-                    tokens.Add(new Token(part, type, position));
+
+                    var newToken = new Token(part, type, position);
+
+                    switch (type)
+                    {
+                        case TokenType.Property:
+                            newToken.PossibleValues = AvailableProperties
+                                .Select(p => p.Name)
+                                .ToList();
+                            break;
+
+                        case TokenType.LogicalOperator:
+                            newToken.PossibleValues = LogicalOperators;
+                            break;
+
+                        case TokenType.Operator:
+                            newToken.PossibleValues = ComparisonOperators;
+                            break;
+
+                    }
+
+
+
+                    tokens.Add(newToken);
                     position += part.Length;
                 }
             }
@@ -126,7 +331,7 @@ namespace RuleEditor.ViewModels.Version3
             if (existingTokens.Count > 0)
             {
                 var prev = existingTokens.Last();
-                if (prev.Type == TokenType.Value || prev.Type == TokenType.CloseParenthesis)
+                if (prev.TokenType == TokenType.Value || prev.TokenType == TokenType.CloseParenthesis)
                 {
                     // Only allow logical operators
                     if (new[] { "AND", "OR", "NOT" }.Any(op => op.StartsWith(word, StringComparison.OrdinalIgnoreCase)))
@@ -145,21 +350,21 @@ namespace RuleEditor.ViewModels.Version3
                 return TokenType.Value;
 
             // Check if it's a property name
-            if (_availableProperties.Any(p => p.Name.StartsWith(word, StringComparison.OrdinalIgnoreCase)))
+            if (AvailableProperties.Any(p => p.Name.StartsWith(word, StringComparison.OrdinalIgnoreCase)))
                 return TokenType.Property;
 
             // If the previous token was an operator, this is likely a value
             if (existingTokens.Count > 0 &&
-                (existingTokens.Last().Type == TokenType.Operator ||
-                 existingTokens.Last().Type == TokenType.LogicalOperator))
+                (existingTokens.Last().TokenType == TokenType.Operator ||
+                 existingTokens.Last().TokenType == TokenType.LogicalOperator))
                 return TokenType.Value;
 
             // Check if it's a full comparison operator
-            if (_comparisonOperators.Contains(word, StringComparer.OrdinalIgnoreCase))
+            if (ComparisonOperators.Contains(word, StringComparer.OrdinalIgnoreCase))
                 return TokenType.Operator;
 
             // NEW: Check if it's a prefix of any comparison operator
-            if (_comparisonOperators.Any(op => op.StartsWith(word, StringComparison.OrdinalIgnoreCase)))
+            if (ComparisonOperators.Any(op => op.StartsWith(word, StringComparison.OrdinalIgnoreCase)))
                 return TokenType.Operator;
 
             // Default to unknown
@@ -180,9 +385,9 @@ namespace RuleEditor.ViewModels.Version3
             int parenthesisCount = 0;
             foreach (var token in tokens)
             {
-                if (token.Type == TokenType.OpenParenthesis)
+                if (token.TokenType == TokenType.OpenParenthesis)
                     parenthesisCount++;
-                else if (token.Type == TokenType.CloseParenthesis)
+                else if (token.TokenType == TokenType.CloseParenthesis)
                     parenthesisCount--;
 
                 if (parenthesisCount < 0) // More closing than opening parentheses
@@ -199,35 +404,35 @@ namespace RuleEditor.ViewModels.Version3
                 var next = i < tokens.Count - 1 ? tokens[i + 1] : null;
 
                 // Rules for valid sequences
-                switch (current.Type)
+                switch (current.TokenType)
                 {
                     case TokenType.Property:
-                        if (next == null || next.Type != TokenType.Operator)
+                        if (next == null || next.TokenType != TokenType.Operator)
                             return false;
                         break;
 
                     case TokenType.Operator:
-                        if (next == null || next.Type != TokenType.Value)
+                        if (next == null || next.TokenType != TokenType.Value)
                             return false;
                         break;
 
                     case TokenType.Value:
-                        if (next != null && next.Type != TokenType.LogicalOperator && next.Type != TokenType.CloseParenthesis)
+                        if (next != null && next.TokenType != TokenType.LogicalOperator && next.TokenType != TokenType.CloseParenthesis)
                             return false;
                         break;
 
                     case TokenType.LogicalOperator:
-                        if (next == null || (next.Type != TokenType.Property && next.Type != TokenType.OpenParenthesis))
+                        if (next == null || (next.TokenType != TokenType.Property && next.TokenType != TokenType.OpenParenthesis))
                             return false;
                         break;
 
                     case TokenType.OpenParenthesis:
-                        if (next == null || (next.Type != TokenType.Property && next.Type != TokenType.OpenParenthesis))
+                        if (next == null || (next.TokenType != TokenType.Property && next.TokenType != TokenType.OpenParenthesis))
                             return false;
                         break;
 
                     case TokenType.CloseParenthesis:
-                        if (next != null && next.Type != TokenType.LogicalOperator && next.Type != TokenType.CloseParenthesis)
+                        if (next != null && next.TokenType   != TokenType.LogicalOperator && next.TokenType != TokenType.CloseParenthesis)
                             return false;
                         break;
 
@@ -256,15 +461,15 @@ namespace RuleEditor.ViewModels.Version3
             }
 
             // Check for balanced parentheses
-            int openParenCount = tokens.Count(t => t.Type == TokenType.OpenParenthesis);
-            int closeParenCount = tokens.Count(t => t.Type == TokenType.CloseParenthesis);
+            int openParenCount = tokens.Count(t => t.TokenType == TokenType.OpenParenthesis);
+            int closeParenCount = tokens.Count(t => t.TokenType == TokenType.CloseParenthesis);
 
             if (openParenCount != closeParenCount)
             {
                 errors.Add($"Unbalanced parentheses: {openParenCount} opening and {closeParenCount} closing");
 
                 // Mark all parentheses as having errors
-                foreach (var token in tokens.Where(t => t.Type == TokenType.OpenParenthesis || t.Type == TokenType.CloseParenthesis))
+                foreach (var token in tokens.Where(t => t.TokenType == TokenType.OpenParenthesis || t.TokenType == TokenType.CloseParenthesis))
                 {
                     token.HasError = true;
                     token.ErrorMessage = "Unbalanced parentheses";
@@ -278,7 +483,7 @@ namespace RuleEditor.ViewModels.Version3
                 var next = i < tokens.Count - 1 ? tokens[i + 1] : null;
                 var prev = i > 0 ? tokens[i - 1] : null;
 
-                switch (current.Type)
+                switch (current.TokenType)
                 {
                     case TokenType.Property:
                         if (next == null)
@@ -287,14 +492,14 @@ namespace RuleEditor.ViewModels.Version3
                             current.HasError = true;
                             current.ErrorMessage = "Property must be followed by an operator";
                         }
-                        else if (next.Type != TokenType.Operator)
+                        else if (next.TokenType != TokenType.Operator)
                         {
                             errors.Add($"Property '{current.Value}' must be followed by an operator, not '{next.Value}'");
                             current.HasError = true;
                             current.ErrorMessage = $"Property must be followed by an operator, not '{next.Value}'";
                         }
 
-                        if (prev != null && prev.Type != TokenType.LogicalOperator && prev.Type != TokenType.OpenParenthesis)
+                        if (prev != null && prev.TokenType != TokenType.LogicalOperator && prev.TokenType != TokenType.OpenParenthesis)
                         {
                             errors.Add($"Property '{current.Value}' must be preceded by a logical operator or opening parenthesis, not '{prev.Value}'");
                             current.HasError = true;
@@ -309,14 +514,14 @@ namespace RuleEditor.ViewModels.Version3
                             current.HasError = true;
                             current.ErrorMessage = "Operator must be followed by a value";
                         }
-                        else if (next.Type != TokenType.Value && next.Type != TokenType.RestrictedValue)
+                        else if (next.TokenType != TokenType.Value && next.TokenType != TokenType.RestrictedValue)
                         {
                             errors.Add($"Operator '{current.Value}' must be followed by a value, not '{next.Value}'");
                             current.HasError = true;
                             current.ErrorMessage = $"Operator must be followed by a value, not '{next.Value}'";
                         }
 
-                        if (prev == null || prev.Type != TokenType.Property)
+                        if (prev == null || prev.TokenType != TokenType.Property)
                         {
                             errors.Add($"Operator '{current.Value}' must be preceded by a property");
                             current.HasError = true;
@@ -325,7 +530,7 @@ namespace RuleEditor.ViewModels.Version3
 
 
                         // Check if the operator is a valid, full operator
-                        bool isValidOperator = _comparisonOperators.Contains(current.Value, StringComparer.OrdinalIgnoreCase);
+                        bool isValidOperator = ComparisonOperators.Contains(current.Value, StringComparer.OrdinalIgnoreCase);
 
                         if (!isValidOperator)
                         {
@@ -336,14 +541,14 @@ namespace RuleEditor.ViewModels.Version3
                         break;
 
                     case TokenType.Value:
-                        if (next != null && next.Type != TokenType.LogicalOperator && next.Type != TokenType.CloseParenthesis)
+                        if (next != null && next.TokenType != TokenType.LogicalOperator && next.TokenType != TokenType.CloseParenthesis)
                         {
                             errors.Add($"Value '{current.Value}' must be followed by a logical operator or closing parenthesis, not '{next.Value}'");
                             current.HasError = true;
                             current.ErrorMessage = $"Value must be followed by a logical operator or closing parenthesis";
                         }
 
-                        if (prev == null || prev.Type != TokenType.Operator)
+                        if (prev == null || prev.TokenType != TokenType.Operator)
                         {
                             errors.Add($"Value '{current.Value}' must be preceded by an operator");
                             current.HasError = true;
@@ -358,7 +563,7 @@ namespace RuleEditor.ViewModels.Version3
                             current.HasError = true;
                             current.ErrorMessage = "Logical operator must be followed by a property or opening parenthesis";
                         }
-                        else if (next.Type != TokenType.Property && next.Type != TokenType.OpenParenthesis)
+                        else if (next.TokenType != TokenType.Property && next.TokenType != TokenType.OpenParenthesis)
                         {
                             errors.Add($"Logical operator '{current.Value}' must be followed by a property or opening parenthesis, not '{next.Value}'");
                             current.HasError = true;
@@ -373,7 +578,7 @@ namespace RuleEditor.ViewModels.Version3
                             current.HasError = true;
                             current.ErrorMessage = "Opening parenthesis must be followed by a property or another opening parenthesis";
                         }
-                        else if (next.Type != TokenType.Property && next.Type != TokenType.OpenParenthesis)
+                        else if (next.TokenType != TokenType.Property && next.TokenType != TokenType.OpenParenthesis)
                         {
                             errors.Add($"Opening parenthesis must be followed by a property or another opening parenthesis, not '{next.Value}'");
                             current.HasError = true;
@@ -382,7 +587,7 @@ namespace RuleEditor.ViewModels.Version3
                         break;
 
                     case TokenType.CloseParenthesis:
-                        if (next != null && next.Type != TokenType.LogicalOperator && next.Type != TokenType.CloseParenthesis)
+                        if (next != null && next.TokenType != TokenType.LogicalOperator && next.TokenType != TokenType.CloseParenthesis)
                         {
                             errors.Add($"Closing parenthesis must be followed by a logical operator or another closing parenthesis, not '{next.Value}'");
                             current.HasError = true;

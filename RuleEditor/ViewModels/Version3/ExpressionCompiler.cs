@@ -57,7 +57,7 @@ namespace RuleEditor.ViewModels.Version3
             if (logicalOperatorIndices.Count == 0)
             {
                 // No logical operators at this level, check for parentheses
-                if (tokens[startIndex].Type == TokenType.OpenParenthesis && tokens[endIndex].Type == TokenType.CloseParenthesis)
+                if (tokens[startIndex].TokenType == TokenType.OpenParenthesis && tokens[endIndex].TokenType == TokenType.CloseParenthesis)
                 {
                     // Remove outer parentheses and parse the inner expression
                     return ParseLogicalExpression(tokens, startIndex + 1, endIndex - 1, parameter);
@@ -133,11 +133,11 @@ namespace RuleEditor.ViewModels.Version3
             
             for (int i = startIndex; i <= endIndex; i++)
             {
-                if (tokens[i].Type == TokenType.OpenParenthesis)
+                if (tokens[i].TokenType == TokenType.OpenParenthesis)
                     parenthesisLevel++;
-                else if (tokens[i].Type == TokenType.CloseParenthesis)
+                else if (tokens[i].TokenType == TokenType.CloseParenthesis)
                     parenthesisLevel--;
-                else if (tokens[i].Type == TokenType.LogicalOperator && parenthesisLevel == 0)
+                else if (tokens[i].TokenType == TokenType.LogicalOperator && parenthesisLevel == 0)
                     result.Add(i);
             }
             
@@ -154,7 +154,7 @@ namespace RuleEditor.ViewModels.Version3
             var operatorToken = tokens[startIndex + 1];
             var valueToken = tokens[startIndex + 2];
 
-            if (propertyToken.Type != TokenType.Property || operatorToken.Type != TokenType.Operator || valueToken.Type != TokenType.Value)
+            if (propertyToken.TokenType != TokenType.Property || operatorToken.TokenType != TokenType.Operator || valueToken.TokenType != TokenType.Value)
                 throw new ArgumentException($"Invalid condition format at position {tokens[startIndex].Position}");
 
             // Get property info

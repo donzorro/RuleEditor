@@ -1,3 +1,4 @@
+using CommunityToolkit.Mvvm.Input;
 using RuleEditor.Models;
 using System;
 using System.Collections.Generic;
@@ -9,18 +10,12 @@ using System.Windows.Input;
 
 namespace RuleEditor.ViewModels.Version3
 {
-    public class RuleEditorControl3ViewModel : INotifyPropertyChanged
+    public class RuleEditorControl3ViewModel : ViewModelBase
     {
         private ExpressionParser _parser;
         private ExpressionCompiler _compiler;
-        private string _expressionText = "";
-        private List<Token> _tokens = new List<Token>();
-        private List<string> _suggestions = new List<string>();
-        private bool _isSyntaxValid;
-        private List<string> _syntaxErrors = new List<string>();
-        private List<Token> _tokensWithErrors = new List<Token>();
-        private string _statusMessage = "Ready";
-        private string _testResultMessage = "";
+        private string _expressionText = "";       
+        private List<string> _syntaxErrors = new List<string>();        
         private int _caretPosition;
         private Token _currentToken;
 
@@ -35,7 +30,16 @@ namespace RuleEditor.ViewModels.Version3
             ("user987", "Jennifer Taylor")
         };
 
-        public event PropertyChangedEventHandler PropertyChanged;
+        public RuleEditorControl3ViewModel()
+        {
+            InitializeAvailableProperties();
+
+            _parser = new ExpressionParser(AvailableProperties);
+            _compiler = new ExpressionCompiler(AvailableProperties);
+
+            ValidateCommand = new RelayCommand(ValidateExpression);
+            TestExpressionCommand = new RelayCommand(TestExpression);
+        }
 
         public string ExpressionText
         {
@@ -53,35 +57,20 @@ namespace RuleEditor.ViewModels.Version3
 
         public List<Token> Tokens
         {
-            get => _tokens;
-            private set
-            {
-                _tokens = value;
-                OnPropertyChanged();
-            }
+            get => GetValue<List<Token>>();
+            private set => SetValue(value);
         }
 
         public List<string> Suggestions
         {
-            get => _suggestions;
-            private set
-            {
-                _suggestions = value;
-                OnPropertyChanged();
-            }
+            get => GetValue<List<string>>();
+            private set => SetValue(value);
         }
 
         public bool IsSyntaxValid
         {
-            get => _isSyntaxValid;
-            private set
-            {
-                if (_isSyntaxValid != value)
-                {
-                    _isSyntaxValid = value;
-                    OnPropertyChanged();
-                }
-            }
+            get => GetValue<bool>();
+            private set => SetValue(value);
         }
 
         public List<string> SyntaxErrors
@@ -97,40 +86,22 @@ namespace RuleEditor.ViewModels.Version3
 
         public List<Token> SyntaxErrorObjects
         {
-            get => _tokensWithErrors;
-            private set
-            {
-                _tokensWithErrors = value;
-                OnPropertyChanged();
-            }
+            get => GetValue<List<Token>>();
+            private set => SetValue(value);
         }
 
         public bool HasSyntaxErrors => SyntaxErrors.Count > 0;
 
         public string StatusMessage
         {
-            get => _statusMessage;
-            set
-            {
-                if (_statusMessage != value)
-                {
-                    _statusMessage = value;
-                    OnPropertyChanged();
-                }
-            }
+            get => GetValue<string>();
+            private set => SetValue(value);
         }
 
         public string TestResultMessage
         {
-            get => _testResultMessage;
-            set
-            {
-                if (_testResultMessage != value)
-                {
-                    _testResultMessage = value;
-                    OnPropertyChanged();
-                }
-            }
+            get => GetValue<string>();
+            private set => SetValue(value);
         }
 
         public int CaretPosition
@@ -162,17 +133,7 @@ namespace RuleEditor.ViewModels.Version3
 
         public ICommand ValidateCommand { get; private set; }
         public ICommand TestExpressionCommand { get; private set; }
-
-        public RuleEditorControl3ViewModel()
-        {
-            InitializeAvailableProperties();
-            _parser = new ExpressionParser(AvailableProperties);
-            _compiler = new ExpressionCompiler(AvailableProperties);
-
-            ValidateCommand = new RelayCommand(ValidateExpression);
-            TestExpressionCommand = new RelayCommand(TestExpression);
-        }
-
+    
         private void InitializeAvailableProperties()
         {
 
@@ -199,6 +160,57 @@ namespace RuleEditor.ViewModels.Version3
             Tokens = _parser.Tokenize(ExpressionText);
             UpdateCurrentToken();
             ValidateExpressionSyntax();
+        }
+
+        public void ApplySelectedSuggestion(string suggestion, int caretPosition)
+        {
+            if (string.IsNullOrEmpty(suggestion)) return;
+
+            var currentToken = CurrentToken;
+
+            if (currentToken != null)
+            {
+                int tokenStart = currentToken.Position;
+                int tokenEnd = tokenStart + currentToken.Length;
+                string before = ExpressionText.Substring(0, tokenStart);
+                string after = ExpressionText.Substring(tokenEnd);
+
+                if (suggestion == "'" || suggestion == "\"")
+                {
+                    // Insert matching quotes and place caret inside
+                    string quotes = suggestion + suggestion;
+                    ExpressionText = before + quotes + after;
+                    CaretPosition = tokenStart + 1;
+                }
+                else
+                {
+                    // Check if a space is needed after the suggestion
+                    bool needsSpace = string.IsNullOrEmpty(after) || !char.IsWhiteSpace(after[0]);
+                    string suggestionWithSpace = suggestion + (needsSpace ? " " : "");
+                    ExpressionText = before + suggestionWithSpace + after;
+                    CaretPosition = tokenStart + suggestion.Length + (needsSpace ? 1 : 0);
+                }
+            }
+            else
+            {
+                // Fallback: just insert at caret
+                string before = ExpressionText.Substring(0, caretPosition);
+                string after = ExpressionText.Substring(caretPosition);
+
+                if (suggestion == "'" || suggestion == "\"")
+                {
+                    string quotes = suggestion + suggestion;
+                    ExpressionText = before + quotes + after;
+                    CaretPosition = caretPosition + 1;
+                }
+                else
+                {
+                    bool needsSpace = string.IsNullOrEmpty(after) || !char.IsWhiteSpace(after[0]);
+                    string suggestionWithSpace = suggestion + (needsSpace ? " " : "");
+                    ExpressionText = before + suggestionWithSpace + after;
+                    CaretPosition = caretPosition + suggestion.Length + (needsSpace ? 1 : 0);
+                }
+            }
         }
 
         public void UpdateCurrentToken()
@@ -230,223 +242,25 @@ namespace RuleEditor.ViewModels.Version3
         {
             List<string> newSuggestions = new List<string>();
 
-            if (CurrentToken == null)
+            var tokenAtCaret = Tokens.FirstOrDefault(t =>
+                t.Position <= CaretPosition &&
+                t.Position + t.Length >= CaretPosition);
+
+            if (tokenAtCaret == null)
             {
                 // If no token, suggest properties or logical operators
-                newSuggestions.AddRange(GetExpectedNextTokenSuggestions());
+                newSuggestions.AddRange(_parser.GetExpectedNextTokenSuggestions(Tokens, CaretPosition));
             }
             else
             {
-                var prevToken = Tokens.LastOrDefault(t => t.Position + t.Length <= CaretPosition);
-                if (ShouldSuggestLogicalOperators(prevToken))
-                {
-                    // Use logical operators from ExpressionParser
-                    newSuggestions.AddRange(ExpressionParser.LogicalOperators);
-                }
-                else
-                {
-                    // Other suggestion logic...
-                }
+                if(tokenAtCaret.PossibleValues != null)
+                    newSuggestions.AddRange(CurrentToken.PossibleValues);
+             
             }
 
             Suggestions = newSuggestions.Distinct().ToList();
         }
 
-        private bool ShouldSuggestLogicalOperators(Token prevToken)
-        {
-            if (prevToken == null) return false;
-
-            bool isValueOrCloseParenthesis = prevToken.Type == TokenType.Value || prevToken.Type == TokenType.CloseParenthesis;
-            bool isCaretAfterToken = CaretPosition >= prevToken.Position + prevToken.Length;
-            bool atEnd = CaretPosition >= (ExpressionText?.Length ?? 0);
-            bool nextIsSpace = !atEnd && ExpressionText[CaretPosition] == ' ';
-            bool lastCharIsSpace = CaretPosition > 0 && ExpressionText[CaretPosition - 1] == ' ';
-
-            return isValueOrCloseParenthesis && (nextIsSpace || lastCharIsSpace);
-        }
-
-        private string GetTokenPrefix(Token token)
-        {
-            int prefixLength = Math.Max(0, CaretPosition - token.Position);
-            if (CaretPosition >= token.Position && CaretPosition <= token.Position + token.Length)
-            {
-                return ExpressionText.Substring(token.Position, prefixLength);
-            }
-            return token.Value ?? string.Empty;
-        }
-
-        private IEnumerable<string> GetMatchingOperatorsForCurrentToken(string tokenPrefix)
-        {
-            var prevPropertyToken = Tokens.LastOrDefault(t => t.Position < CurrentToken.Position && t.Type == TokenType.Property);
-            Type propertyType = typeof(string); // Default to string
-
-            if (prevPropertyToken != null)
-            {
-                var propInfo = AvailableProperties.FirstOrDefault(p => p.Name.Equals(prevPropertyToken.Value, StringComparison.OrdinalIgnoreCase));
-                if (propInfo != null)
-                {
-                    propertyType = propInfo.Type;
-                }
-            }
-
-            var allOperators = GetValidOperatorsForType(propertyType);
-            return allOperators.Where(op => op.StartsWith(tokenPrefix, StringComparison.OrdinalIgnoreCase));
-        }
-
-
-        private List<string> GetExpectedNextTokenSuggestions()
-        {
-            // If there are no tokens yet or we're at the end, suggest properties or logical operators
-            if (Tokens.Count == 0)
-            {
-                return AvailableProperties.Select(p => p.Name).ToList();
-            }
-
-            // Find the last token before the caret
-            var lastToken = Tokens.LastOrDefault(t => t.Position < CaretPosition);
-            if (lastToken == null)
-            {
-                return AvailableProperties.Select(p => p.Name).ToList();
-            }
-
-            // Special case for numeric values - if we're at the end of a number with no space,
-            // don't show any suggestions (user might still be typing the number)
-            if (lastToken.Type == TokenType.Value &&
-                decimal.TryParse(lastToken.Value, out _) &&
-                CaretPosition == lastToken.Position + lastToken.Length)
-            {
-                return new List<string>(); // Return empty list to indicate no suggestions
-            }
-
-            // --- FIX: After a value or close parenthesis, only suggest logical operators ---
-            if ((lastToken.Type == TokenType.Value || lastToken.Type == TokenType.CloseParenthesis)
-                && CaretPosition >= lastToken.Position + lastToken.Length)
-            {
-                return new List<string> { "AND", "OR" };
-            }
-
-            // Suggest based on the last token type
-            switch (lastToken.Type)
-            {
-                case TokenType.Property:
-                    // After a property, suggest operators
-                    var propInfo = AvailableProperties
-                        .FirstOrDefault(p => p.Name.Equals(lastToken.Value, StringComparison.OrdinalIgnoreCase));
-
-                    return propInfo != null
-                        ? GetValidOperatorsForType(propInfo.Type)
-                        : new List<string>();
-
-                case TokenType.Operator:
-                    // After an operator, suggest values
-                    var prevPropToken = Tokens
-                        .LastOrDefault(t => t.Position < lastToken.Position && t.Type == TokenType.Property);
-
-                    if (prevPropToken != null)
-                    {
-                        var prop = AvailableProperties
-                            .FirstOrDefault(p => p.Name.Equals(prevPropToken.Value, StringComparison.OrdinalIgnoreCase));
-
-                        // Special case for Friends property
-                        if (prop != null && prop.AllowedValues != null)
-                        {
-                            // Just return the full list of formatted friend suggestions
-                            return prop.AllowedValues.ToList();
-                        }
-
-                        return prop != null
-                            ? GetCommonValuesForType(prop.Type, "")
-                            : new List<string>();
-                    }
-                    return new List<string>();
-
-                case TokenType.Value:
-                case TokenType.CloseParenthesis:
-                    // Already handled above, but keep for completeness
-                    return new List<string> { "AND", "OR" };
-
-                case TokenType.LogicalOperator:
-                    // After a logical operator, suggest properties or opening parenthesis
-                    return AvailableProperties.Select(p => p.Name)
-                        .Concat(new[] { "(" })
-                        .ToList();
-
-                case TokenType.OpenParenthesis:
-                    // After an opening parenthesis, suggest properties
-                    return AvailableProperties.Select(p => p.Name).ToList();
-
-                default:
-                    return new List<string>();
-            }
-        }
-
-        private List<string> GetValidOperatorsForType(Type type)
-        {
-            var operators = new List<string> { "==", "!=" };
-
-            if (type == typeof(string))
-            {
-                operators.AddRange(new[] { "CONTAINS", "STARTSWITH", "ENDSWITH" });
-            }
-
-            if (type == typeof(int) || type == typeof(decimal) || type == typeof(DateTime))
-            {
-                operators.AddRange(new[] { ">", "<", ">=", "<=" });
-            }
-
-            return operators;
-        }
-
-        private List<string> GetCommonValuesForType(Type type, string prefix = "")
-        {
-            // Get the property info by checking the token values
-            if (Tokens.Count >= 2)
-            {
-                var lastOperatorToken = Tokens.LastOrDefault(t => t.Type == TokenType.Operator);
-                var propertyToken = Tokens.LastOrDefault(t =>
-                    t.Position < (lastOperatorToken?.Position ?? 0) &&
-                    t.Type == TokenType.Property);
-
-                if (propertyToken != null)
-                {
-                    // Check if this property has restricted values
-                    var propInfo = AvailableProperties
-                        .FirstOrDefault(p => p.Name.Equals(propertyToken.Value, StringComparison.OrdinalIgnoreCase));
-
-                    if (propInfo != null && propInfo.AllowedValues != null)
-                    {
-                        // Return the allowed values for this property
-                        return propInfo.AllowedValues.ToList();
-                    }
-                }
-            }
-
-            // If no specific allowed values, return default values for the type
-            if (type == typeof(bool))
-            {
-                return new List<string> { "true", "false" }
-                    .Where(v => string.IsNullOrEmpty(prefix) || v.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-            }
-
-            if (type == typeof(int))
-            {
-                return new List<string> { "0", "1", "10", "100" }
-                    .Where(v => string.IsNullOrEmpty(prefix) || v.StartsWith(prefix))
-                    .ToList();
-            }
-
-            if (type == typeof(string))
-            {
-                // For strings, suggest using quotes
-                if (!prefix.StartsWith("'") && !prefix.StartsWith("\""))
-                {
-                    return new List<string> { "'" };
-                }
-            }
-
-            return new List<string>();
-        }
 
         public void ValidateExpressionSyntax()
         {
@@ -504,34 +318,6 @@ namespace RuleEditor.ViewModels.Version3
             {
                 TestResultMessage = $"Error: {ex.Message}";
             }
-        }
-
-        protected void OnPropertyChanged([CallerMemberName] string propertyName = null)
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }
-    }
-
-    // Simple relay command implementation
-    public class RelayCommand : ICommand
-    {
-        private readonly Action _execute;
-        private readonly Func<bool> _canExecute;
-
-        public RelayCommand(Action execute, Func<bool> canExecute = null)
-        {
-            _execute = execute ?? throw new ArgumentNullException(nameof(execute));
-            _canExecute = canExecute;
-        }
-
-        public bool CanExecute(object parameter) => _canExecute?.Invoke() ?? true;
-
-        public void Execute(object parameter) => _execute();
-
-        public event EventHandler CanExecuteChanged
-        {
-            add { CommandManager.RequerySuggested += value; }
-            remove { CommandManager.RequerySuggested -= value; }
-        }
+        }     
     }
 }

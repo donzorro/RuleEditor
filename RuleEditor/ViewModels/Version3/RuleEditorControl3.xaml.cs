@@ -106,6 +106,7 @@ namespace RuleEditor.ViewModels.Version3
 
         private void UpdateSuggestionsPopup()
         {
+        
             // Always update the suggestions list before deciding whether to show the popup
             suggestionsList.ItemsSource = _viewModel.Suggestions;
 
@@ -301,69 +302,18 @@ namespace RuleEditor.ViewModels.Version3
 
         private void ApplySelectedSuggestion()
         {
-            if (suggestionsList.SelectedItem == null)
-                return;
+            if (suggestionsList.SelectedItem == null) return;
 
             var suggestion = suggestionsList.SelectedItem.ToString();
-            var currentToken = _viewModel.CurrentToken;
+            var caretPosition = expressionTextBox.CaretIndex;
 
-            if (currentToken != null)
-            {
-                int tokenStart = currentToken.Position;
-                int tokenEnd = tokenStart + currentToken.Length;
-                string before = expressionTextBox.Text.Substring(0, tokenStart);
-                string after = expressionTextBox.Text.Substring(tokenEnd);
+            _viewModel.ApplySelectedSuggestion(suggestion, caretPosition);
 
-                if (suggestion == "'" || suggestion == "\"")
-                {
-                    // Insert matching quotes and place caret inside
-                    string quotes = suggestion + suggestion;
-                    string newText = before + quotes + after;
-                    expressionTextBox.Text = newText;
-                    expressionTextBox.CaretIndex = tokenStart + 1;
-                    _viewModel.ExpressionText = newText;
-                    _viewModel.CaretPosition = expressionTextBox.CaretIndex;
-                }
-                else
-                {
-                    // Check if a space is needed after the suggestion
-                    bool needsSpace = string.IsNullOrEmpty(after) || !char.IsWhiteSpace(after[0]);
-                    string suggestionWithSpace = suggestion + (needsSpace ? " " : "");
-                    string newText = before + suggestionWithSpace + after;
-                    expressionTextBox.Text = newText;
-                    expressionTextBox.CaretIndex = tokenStart + suggestion.Length + (needsSpace ? 1 : 0);
-                    _viewModel.ExpressionText = newText;
-                    _viewModel.CaretPosition = expressionTextBox.CaretIndex;
-                }
-            }
-            else
-            {
-                // Fallback: just insert at caret
-                int caretIndex = expressionTextBox.CaretIndex;
-                string before = expressionTextBox.Text.Substring(0, caretIndex);
-                string after = expressionTextBox.Text.Substring(caretIndex);
-
-                if (suggestion == "'" || suggestion == "\"")
-                {
-                    string quotes = suggestion + suggestion;
-                    string newText = before + quotes + after;
-                    expressionTextBox.Text = newText;
-                    expressionTextBox.CaretIndex = caretIndex + 1;
-                    _viewModel.ExpressionText = newText;
-                    _viewModel.CaretPosition = expressionTextBox.CaretIndex;
-                }
-                else
-                {
-                    bool needsSpace = string.IsNullOrEmpty(after) || !char.IsWhiteSpace(after[0]);
-                    string suggestionWithSpace = suggestion + (needsSpace ? " " : "");
-                    string newText = before + suggestionWithSpace + after;
-                    expressionTextBox.Text = newText;
-                    expressionTextBox.CaretIndex = caretIndex + suggestion.Length + (needsSpace ? 1 : 0);
-                    _viewModel.ExpressionText = newText;
-                    _viewModel.CaretPosition = expressionTextBox.CaretIndex;
-                }
-            }
+            // Update the TextBox with the updated ExpressionText and CaretPosition
+            expressionTextBox.Text = _viewModel.ExpressionText;
+            expressionTextBox.CaretIndex = _viewModel.CaretPosition;
         }
+
 
         private void ClearErrorAdorners()
         {
