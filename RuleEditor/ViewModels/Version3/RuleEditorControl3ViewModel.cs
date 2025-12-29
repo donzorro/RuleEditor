@@ -184,18 +184,49 @@ namespace RuleEditor.ViewModels.Version3
                 }
                 else
                 {
+                    // Check if this is a restricted value (from a property's AllowedValues)
+                    bool isRestrictedValue = false;
+                    if (currentToken.TokenType == TokenType.Value)
+                    {
+                        // Find the property token that precedes this value
+                        var propertyToken = Tokens.LastOrDefault(t => 
+                            t.Position < currentToken.Position && 
+                            t.TokenType == TokenType.Property);
+                        
+                        if (propertyToken != null)
+                        {
+                            var propInfo = AvailableProperties.FirstOrDefault(p => 
+                                p.Name.Equals(propertyToken.Value, StringComparison.OrdinalIgnoreCase));
+                            
+                            if (propInfo?.AllowedValues != null)
+                            {
+                                isRestrictedValue = propInfo.AllowedValues.Any(av => 
+                                    av.Equals(suggestion, StringComparison.OrdinalIgnoreCase));
+                            }
+                        }
+                    }
+                    
                     // Check if a space is needed after the suggestion
                     bool needsSpace = string.IsNullOrEmpty(after) || !char.IsWhiteSpace(after[0]);
-                    string suggestionWithSpace = suggestion + (needsSpace ? " " : "");
+                    
+                    string suggestionToInsert = suggestion;
+                    
+                    // Wrap restricted values in quotes if not already quoted
+                    if (isRestrictedValue && !suggestion.StartsWith("'") && !suggestion.StartsWith("\""))
+                    {
+                        suggestionToInsert = "'" + suggestion + "'";
+                    }
+                    
+                    string suggestionWithSpace = suggestionToInsert + (needsSpace ? " " : "");
                     ExpressionText = before + suggestionWithSpace + after;
-                    CaretPosition = tokenStart + suggestion.Length + (needsSpace ? 1 : 0);
+                    CaretPosition = tokenStart + suggestionToInsert.Length + (needsSpace ? 1 : 0);
                 }
             }
             else
             {
                 // Fallback: just insert at caret
                 string before = ExpressionText.Substring(0, caretPosition);
-                string after = ExpressionText.Substring(caretPosition);
+                string after = caretPosition < ExpressionText.Length ? ExpressionText.Substring(caretPosition) : "";
 
                 if (suggestion == "'" || suggestion == "\"")
                 {
@@ -205,10 +236,47 @@ namespace RuleEditor.ViewModels.Version3
                 }
                 else
                 {
+                    // Check if this is a restricted value from the property's AllowedValues
+                    bool isRestrictedValue = false;
+                    if (Tokens.Count > 0)
+                    {
+                        // Find the last operator token before caret position
+                        var lastOperatorToken = Tokens.LastOrDefault(t => t.Position <= caretPosition && t.TokenType == TokenType.Operator);
+                        
+                        if (lastOperatorToken != null)
+                        {
+                            // Find the property that comes before this operator
+                            var propertyToken = Tokens.LastOrDefault(t => 
+                                t.Position < lastOperatorToken.Position && 
+                                t.TokenType == TokenType.Property);
+                            
+                            if (propertyToken != null)
+                            {
+                                var propInfo = AvailableProperties.FirstOrDefault(p => 
+                                    p.Name.Equals(propertyToken.Value, StringComparison.OrdinalIgnoreCase));
+                                
+                                if (propInfo?.AllowedValues != null)
+                                {
+                                    isRestrictedValue = propInfo.AllowedValues.Any(av => 
+                                        av.Equals(suggestion, StringComparison.OrdinalIgnoreCase));
+                                }
+                            }
+                        }
+                    }
+                    
                     bool needsSpace = string.IsNullOrEmpty(after) || !char.IsWhiteSpace(after[0]);
-                    string suggestionWithSpace = suggestion + (needsSpace ? " " : "");
+                    
+                    string suggestionToInsert = suggestion;
+                    
+                    // Wrap restricted values in quotes if not already quoted
+                    if (isRestrictedValue && !suggestion.StartsWith("'") && !suggestion.StartsWith("\""))
+                    {
+                        suggestionToInsert = "'" + suggestion + "'";
+                    }
+                    
+                    string suggestionWithSpace = suggestionToInsert + (needsSpace ? " " : "");
                     ExpressionText = before + suggestionWithSpace + after;
-                    CaretPosition = caretPosition + suggestion.Length + (needsSpace ? 1 : 0);
+                    CaretPosition = caretPosition + suggestionToInsert.Length + (needsSpace ? 1 : 0);
                 }
             }
         }
