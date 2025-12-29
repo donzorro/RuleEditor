@@ -43,6 +43,14 @@ namespace RuleEditor.ViewModels.Version3
             expressionTextBox.SelectionChanged += ExpressionTextBox_SelectionChanged;
             expressionTextBox.MouseMove += ExpressionTextBox_MouseMove;
             expressionTextBox.KeyUp += ExpressionTextBox_KeyUp;
+            expressionTextBox.GotFocus += ExpressionTextBox_GotFocus;
+        }
+
+        private void ExpressionTextBox_GotFocus(object sender, RoutedEventArgs e)
+        {
+            // When textbox gains focus, show suggestions
+            _viewModel.CaretPosition = expressionTextBox.CaretIndex;
+            UpdateSuggestionsPopup();
         }
 
         private void ViewModel_PropertyChanged(object sender, PropertyChangedEventArgs e)
@@ -256,8 +264,21 @@ namespace RuleEditor.ViewModels.Version3
                         // Apply the selected suggestion
                         if (suggestionsList.SelectedItem != null)
                         {
-                            ApplySelectedSuggestion();
-                            e.Handled = true;
+                            var selectedSuggestion = suggestionsList.SelectedItem.ToString();
+                            
+                            // For AND/OR, add a space instead of a line break
+                            if (selectedSuggestion.Equals("AND", StringComparison.OrdinalIgnoreCase) ||
+                                selectedSuggestion.Equals("OR", StringComparison.OrdinalIgnoreCase))
+                            {
+                                ApplySelectedSuggestion();
+                                // Space is already added by ApplySelectedSuggestion
+                                e.Handled = true;
+                            }
+                            else
+                            {
+                                ApplySelectedSuggestion();
+                                e.Handled = true;
+                            }
                         }
                         break;
 
