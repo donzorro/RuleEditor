@@ -39,7 +39,9 @@ namespace RuleEditor.ViewModels.Version3
             
             // Hook up text changed event
             expressionTextBox.TextChanged += ExpressionTextBox_TextChanged;
+            expressionTextBox.SelectionChanged += ExpressionTextBox_SelectionChanged;
             expressionTextBox.MouseMove += ExpressionTextBox_MouseMove;
+            expressionTextBox.KeyUp += ExpressionTextBox_KeyUp;
         }
 
         private void ViewModel_PropertyChanged(object sender, PropertyChangedEventArgs e)
@@ -95,7 +97,7 @@ namespace RuleEditor.ViewModels.Version3
         private void ExpressionTextBox_SelectionChanged(object sender, RoutedEventArgs e)
     {
         if (_isNavigatingSuggestions)
-            return;
+        return;
 
         // Update caret position in the view model
         _viewModel.CaretPosition = expressionTextBox.CaretIndex;
@@ -103,6 +105,16 @@ namespace RuleEditor.ViewModels.Version3
         // Always show and update suggestions popup
         UpdateSuggestionsPopup();
     }
+
+        private void ExpressionTextBox_KeyUp(object sender, KeyEventArgs e)
+        {
+            // Update caret position when arrow keys are used
+            if (e.Key == Key.Left || e.Key == Key.Right || e.Key == Key.Home || e.Key == Key.End)
+            {
+                _viewModel.CaretPosition = expressionTextBox.CaretIndex;
+                UpdateSuggestionsPopup();
+            }
+        }
 
         private void UpdateSuggestionsPopup()
         {
@@ -139,6 +151,9 @@ namespace RuleEditor.ViewModels.Version3
                 suggestionsList.SelectedIndex = 0;
             else
                 suggestionsList.SelectedIndex = -1;
+
+
+            suggestionsList.ScrollIntoView(suggestionsList.SelectedItem);
         }
 
         private double CalculatePopupHorizontalOffset()
@@ -186,6 +201,15 @@ namespace RuleEditor.ViewModels.Version3
                 }
             }
 
+            // Handle Space key to show suggestions after space is added
+            if (e.Key == Key.Space)
+            {
+                // Allow the space to be added, then show suggestions
+                // We'll update suggestions in TextChanged event
+                e.Handled = false;
+                return;
+            }
+
             if (suggestionsPopup.IsOpen)
             {
                 switch (e.Key)
@@ -231,27 +255,6 @@ namespace RuleEditor.ViewModels.Version3
                         break;
                 }
             }
-
-            //var token = _viewModel.CurrentToken;
-            //if (token == null)
-            //    return;
-
-            //// Only restrict for Property or LogicalOperator tokens
-            //if (token.PossibleTypes.Contains(TokenType.Property) || token.PossibleTypes.Contains(TokenType.LogicalOperator))
-            //{
-            //    // Simulate what the token would be after typing this character
-            //    int caretInToken = expressionTextBox.CaretIndex - token.Position;
-            //    string before = token.Value.Substring(0, Math.Max(0, caretInToken));
-            //    string after = token.Value.Substring(Math.Max(0, caretInToken));
-            //    string simulatedToken = before + e.Key.ToString() + after; // Use e.Key.ToString() instead of e.Text
-
-            //    // Check if any suggestion starts with the simulated token (case-insensitive)
-            //    bool valid = _viewModel.Suggestions.Any(s => s.StartsWith(simulatedToken, StringComparison.OrdinalIgnoreCase));
-            //    if (!valid)
-            //    {
-            //        e.Handled = true; // Block the input
-            //    }
-            //}
 
             // Start validation timer when typing
             if (!e.Handled && e.Key != Key.Up && e.Key != Key.Down)
@@ -310,8 +313,16 @@ namespace RuleEditor.ViewModels.Version3
             _viewModel.ApplySelectedSuggestion(suggestion, caretPosition);
 
             // Update the TextBox with the updated ExpressionText and CaretPosition
+            _isInternalUpdate = true;
             expressionTextBox.Text = _viewModel.ExpressionText;
             expressionTextBox.CaretIndex = _viewModel.CaretPosition;
+            _isInternalUpdate = false;
+            
+            // Close the suggestions popup after applying
+            suggestionsPopup.IsOpen = false;
+            
+            // Update suggestions to show what comes next
+            UpdateSuggestionsPopup();
         }
 
 

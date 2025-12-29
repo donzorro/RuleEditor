@@ -123,7 +123,7 @@ namespace RuleEditor.ViewModels.Version3
                             return prop.AllowedValues.ToList();
                         }
 
-                        return prop != null
+                       return prop != null
                             ? GetCommonValuesForType(Tokens, "")
                             : new List<string>();
                     }
@@ -202,15 +202,13 @@ namespace RuleEditor.ViewModels.Version3
                             {
                                 // For integers, suggest numeric values
                                 return new List<string> { "0", "1", "10", "100" }
-                                    .Where(v => string.IsNullOrEmpty(prefix) || v.StartsWith(prefix))
+                                    .Where(v => string.IsNullOrEmpty(prefix) || v.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                                     .ToList();
                             }
                             else if (propInfo.Type == typeof(bool))
                             {
-                                // For booleans, suggest true/false
-                                return new List<string> { "true", "false" }
-                                    .Where(v => string.IsNullOrEmpty(prefix) || v.StartsWith(prefix))
-                                    .ToList();
+                                // For booleans, always return both true/false (no prefix filtering for complete values)
+                                return new List<string> { "true", "false" };
                             }
 
                         }
@@ -310,12 +308,16 @@ namespace RuleEditor.ViewModels.Version3
                             break;
 
                         case TokenType.Operator:
-                            newToken.PossibleValues = ComparisonOperators;
+                            var property = tokens.Where(q => q.TokenType == TokenType.Property).LastOrDefault();
+                            var propInfo = AvailableProperties.FirstOrDefault(p => p.Name.Equals(property.Value, StringComparison.OrdinalIgnoreCase));
+                            newToken.PossibleValues = GetValidOperatorsForType(propInfo.Type);
                             break;
 
+                        case TokenType.Value:
+                            // Set PossibleValues for value tokens based on the property type
+                            newToken.PossibleValues = GetCommonValuesForType(tokens, part);
+                            break;
                     }
-
-
 
                     tokens.Add(newToken);
                     position += part.Length;
@@ -527,7 +529,24 @@ namespace RuleEditor.ViewModels.Version3
                             current.HasError = true;
                             current.ErrorMessage = "Operator must be preceded by a property";
                         }
+                        else
+                        {
+                            // Check if the operator is valid for the property type
+                            var propertyToken = prev;
+                            var propInfo = AvailableProperties
+                                .FirstOrDefault(p => p.Name.Equals(propertyToken.Value, StringComparison.OrdinalIgnoreCase));
 
+                            if (propInfo != null)
+                            {
+                                var validOperatorsForType = GetValidOperatorsForType(propInfo.Type);
+                                if (!validOperatorsForType.Contains(current.Value, StringComparer.OrdinalIgnoreCase))
+                                {
+                                    errors.Add($"Operator '{current.Value}' is not valid for property '{propertyToken.Value}' of type {propInfo.Type.Name}");
+                                    current.HasError = true;
+                                    current.ErrorMessage = $"Operator '{current.Value}' is not valid for {propInfo.Type.Name} type";
+                                }
+                            }
+                        }
 
                         // Check if the operator is a valid, full operator
                         bool isValidOperator = ComparisonOperators.Contains(current.Value, StringComparer.OrdinalIgnoreCase);
@@ -553,6 +572,29 @@ namespace RuleEditor.ViewModels.Version3
                             errors.Add($"Value '{current.Value}' must be preceded by an operator");
                             current.HasError = true;
                             current.ErrorMessage = "Value must be preceded by an operator";
+                        }
+                        else
+                        {
+                            // Check if the value type matches the property type
+                            var operatorToken = prev;
+                            var propertyToken = i >= 2 ? tokens[i - 2] : null;
+
+                            if (propertyToken != null && propertyToken.TokenType == TokenType.Property)
+                            {
+                                var propInfo = AvailableProperties
+                                    .FirstOrDefault(p => p.Name.Equals(propertyToken.Value, StringComparison.OrdinalIgnoreCase));
+
+                                if (propInfo != null)
+                                {
+                                    // Check if the value is valid for this property type
+                                    if (!IsValueValidForPropertyType(current.Value, propInfo.Type))
+                                    {
+                                        errors.Add($"Value '{current.Value}' is not valid for property '{propertyToken.Value}' of type {propInfo.Type.Name}");
+                                        current.HasError = true;
+                                        current.ErrorMessage = $"Value '{current.Value}' is not valid for {propInfo.Type.Name} type";
+                                    }
+                                }
+                            }
                         }
                         break;
 
@@ -610,6 +652,7 @@ namespace RuleEditor.ViewModels.Version3
             // Remove quotes if present
             if ((valueToCheck.StartsWith("'") && valueToCheck.EndsWith("'")) ||
                 (valueToCheck.StartsWith("\"") && valueToCheck.EndsWith("\"")))
+
             {
                 valueToCheck = valueToCheck.Substring(1, valueToCheck.Length - 2);
             }
@@ -639,6 +682,53 @@ namespace RuleEditor.ViewModels.Version3
 
                 return cleanValue.StartsWith(valueToCheck, StringComparison.OrdinalIgnoreCase);
             });
+        }
+
+        private bool IsValueValidForPropertyType(string value, Type propertyType)
+        {
+            // Remove quotes if present (for string values)
+            string unquotedValue = value;
+            if ((value.StartsWith("'") && value.EndsWith("'")) ||
+                (value.StartsWith("\"") && value.EndsWith("\"")))
+            {
+                unquotedValue = value.Substring(1, value.Length - 2);
+            }
+
+            // Check if value is a boolean literal
+            bool isBoolLiteral = value.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+                                value.Equals("false", StringComparison.OrdinalIgnoreCase);
+
+            // Check if value is a numeric literal
+            bool isNumericLiteral = decimal.TryParse(value, out _);
+
+            // Check if value is a quoted string
+            bool isQuotedString = (value.StartsWith("'") && value.EndsWith("'")) ||
+                                  (value.StartsWith("\"") && value.EndsWith("\""));
+
+            // Validate based on property type
+            if (propertyType == typeof(bool))
+            {
+                // Boolean properties can only accept boolean literals
+                return isBoolLiteral;
+            }
+            else if (propertyType == typeof(int) || propertyType == typeof(decimal))
+            {
+                // Numeric properties can only accept numeric literals
+                return isNumericLiteral;
+            }
+            else if (propertyType == typeof(string))
+            {
+                // String properties must have quoted strings (not boolean or numeric)
+                return isQuotedString;
+            }
+            else if (propertyType == typeof(DateTime))
+            {
+                // DateTime can accept quoted strings (in ISO format) or datetime literals
+                return isQuotedString || DateTime.TryParse(unquotedValue, out _);
+            }
+
+            // Default: accept the value
+            return true;
         }
     }
 }

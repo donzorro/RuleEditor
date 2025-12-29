@@ -150,7 +150,7 @@ namespace RuleEditor.ViewModels.Version3
                     Name = "Friends",
                     Type = typeof(string),
                     Description = "Comma-separated list of friend user IDs",
-                    AllowedValues = _sampleFriends.Select(f => $"'{f.FullName} ({f.Id})'")
+                    AllowedValues = _sampleFriends.Select(f => $"{f.FullName} ({f.Id})")
                 }
             };
         }
@@ -226,6 +226,12 @@ namespace RuleEditor.ViewModels.Version3
                 _currentToken = null;
                 OnPropertyChanged(nameof(CurrentToken));
                 UpdateSuggestions();
+
+                //if(Suggestions.Count == 1)
+                //{
+                //    // If only one suggestion, auto-select it
+                //    ApplySelectedSuggestion(Suggestions[0], CaretPosition);
+                //}
             }
             else
             {
