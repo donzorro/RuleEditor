@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -201,8 +202,20 @@ namespace RuleEditor.ViewModels.Version3
                 }
             }
 
-            // Handle Space key to show suggestions after space is added
-            if (e.Key == Key.Space)
+            // Handle Space key when dropdown is open - apply suggestion then add space
+            if (e.Key == Key.Space && suggestionsPopup.IsOpen)
+            {
+                if (suggestionsList.SelectedItem != null)
+                {
+                    ApplySelectedSuggestion();
+                    // The space will be added by TextChanged, so mark as handled to prevent double space
+                    e.Handled = true;
+                    return;
+                }
+            }
+
+            // Handle Space key when dropdown is closed - just show suggestions
+            if (e.Key == Key.Space && !suggestionsPopup.IsOpen)
             {
                 // Allow the space to be added, then show suggestions
                 // We'll update suggestions in TextChanged event
